@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Ask grounded questions about your PDF, TXT, Markdown and DOCX documents." />
+  <title>Document Chatbot</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">DC</span>
+        <div class="brand-copy">
+          <h1>Document Chatbot</h1>
+          <p>Grounded answers from your own files</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span id="health-pill" class="pill pill--pending" role="status">Connecting…</span>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar" aria-label="Document library">
+        <section class="panel panel--upload">
+          <div class="panel-heading">
+            <h2>Add documents</h2>
+            <span class="muted small">PDF · TXT · MD · DOCX</span>
+          </div>
+
+          <div id="dropzone" class="dropzone" role="button" tabindex="0"
+               aria-label="Upload documents. Drop files here or press Enter to browse.">
+            <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 16V4" />
+              <path d="m7 9 5-5 5 5" />
+              <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+            </svg>
+            <p><strong>Drop files here</strong> or <span class="link-text">browse</span></p>
+            <p class="muted small">Up to 20 MB each · 10 files at a time</p>
+          </div>
+          <input id="file-input" type="file" multiple hidden
+                 accept=".pdf,.txt,.md,.docx,application/pdf,text/plain,text/markdown" />
+
+          <div class="upload-actions">
+            <button id="upload-btn" class="btn btn--secondary" type="button">Choose files</button>
+            <button id="paste-btn" class="btn btn--ghost" type="button">Paste text</button>
+          </div>
+
+          <div id="upload-progress" class="progress" hidden>
+            <div class="progress-head">
+              <span id="progress-label">Uploading…</span>
+              <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-track" role="progressbar" aria-labelledby="progress-label"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track">
+              <div id="progress-bar" class="progress-bar"></div>
+            </div>
+          </div>
+
+          <ul id="upload-feedback" class="feedback" hidden></ul>
+        </section>
+
+        <section class="panel panel--docs">
+          <div class="panel-heading">
+            <h2>Library</h2>
+            <span id="doc-count" class="count-badge">0</span>
+          </div>
+
+          <div class="doc-toolbar">
+            <label class="checkbox">
+              <input id="select-all" type="checkbox" />
+              <span>Select all</span>
+            </label>
+            <button id="refresh-docs" class="icon-btn" type="button" aria-label="Refresh document list" title="Refresh">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <path d="M21 3v6h-6" />
+              </svg>
+            </button>
+          </div>
+
+          <div id="doc-list" class="doc-list">
+            <p class="empty-note">Loading documents…</p>
+          </div>
+        </section>
+      </aside>
+
+      <main class="chat">
+        <section class="chat-head">
+          <div>
+            <h2>Ask your documents</h2>
+            <p id="scope-summary" class="muted small">Searching all documents</p>
+          </div>
+          <button id="clear-chat" class="btn btn--ghost" type="button">Clear chat</button>
+        </section>
+
+        <section id="chat-log" class="chat-log" role="log" aria-label="Conversation"></section>
+
+        <section class="composer">
+          <form id="chat-form" class="composer-form" autocomplete="off">
+            <label class="sr-only" for="question">Your question</label>
+            <textarea id="question" rows="1" maxlength="2000"
+                      placeholder="Ask a question about your documents…"></textarea>
+            <div class="composer-bar">
+              <span id="composer-hint" class="composer-hint muted small">Loading…</span>
+              <div class="composer-meta">
+                <span id="question-count" class="muted small">0 / 2000</span>
+                <button id="send-btn" class="btn btn--primary" type="submit" disabled>Send</button>
+              </div>
+            </div>
+          </form>
+          <p class="composer-note">Answers are generated only from the selected documents. Verify important details against the source.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="banner" class="banner" role="alert" hidden>
+    <span id="banner-text"></span>
+    <button id="banner-close" class="banner-close" type="button" aria-label="Dismiss error">×</button>
+  </div>
+
+  <dialog id="text-dialog" class="dialog" aria-labelledby="text-dialog-title">
+    <form id="text-form" class="dialog-form" novalidate>
+      <div class="dialog-head">
+        <div>
+          <h2 id="text-dialog-title">Paste text</h2>
+          <p class="muted small">The text is chunked, embedded and stored just like an uploaded file.</p>
+        </div>
+        <button id="text-close" class="icon-btn" type="button" aria-label="Close dialog">×</button>
+      </div>
+
+      <label class="field">
+        <span>Title</span>
+        <input id="text-title" type="text" maxlength="120" placeholder="e.g. Meeting notes" />
+      </label>
+
+      <label class="field">
+        <span>Content</span>
+        <textarea id="text-content" rows="10" maxlength="100000"
+                  placeholder="Paste your notes, an article, or any plain text…"></textarea>
+      </label>
+
+      <div class="dialog-meta">
+        <span id="text-count" class="muted small">0 / 100,000 characters</span>
+        <span id="text-error" class="form-error" role="alert" hidden></span>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="text-cancel" class="btn btn--ghost" type="button">Cancel</button>
+        <button id="text-save" class="btn btn--primary" type="submit">Add to library</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="sr-announcer" class="sr-only" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
