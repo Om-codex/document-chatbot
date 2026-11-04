@@ -1,5 +1,5 @@
 from pathlib import Path
-from langchain_chroma import langchain_chroma
+from langchain_chroma import Chroma
 from embeddings.embedding_model import get_embedding_model
 
 BASE_DIR = Path(__file__).resolve().parent.parent
