@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 CHROMA_PATH = BASE_DIR / "data" / "chroma_db"
 
-COLLECTION_NAME = "document_collection"
+COLLECTION_NAME = "document_collection_v2"
 
 def get_vector_store():
   embedding_model = get_embedding_model()
