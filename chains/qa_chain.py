@@ -16,9 +16,12 @@ def get_qa_chain():
   llm = get_llm()
   parser = StrOutputParser()
 
+  # langchain converts to RunnableParallel when it sees Runnables inside a dictionary
   qa_chain = (
+
+    # parallel chain
     {
-      "context" : retriever | format_docs,
+      "context" : retriever | format_docs, # the question enters(input) this chain and goes to retriever(finds related docs) then format_docs(formats docs given by retriever)
       "question" : RunnablePassthrough()
     } | prompt | llm | parser
   )
