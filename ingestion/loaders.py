@@ -8,13 +8,13 @@ def load_document(file_path:str):
   if not path.exists():
     raise FileNotFoundError(f"File not found: {file_path}")
 
-  extenstion = path.suffix.lower()
+  extension = path.suffix.lower()
 
   # load pdf file
   if extension == ".pdf":
     loader = PyPDFLoader(str(path))
   # load txt file
-  elif extenstion == ".txt":
+  elif extension == ".txt":
     loader = TextLoader(
       str(path),
       encoding ="utf-8"
