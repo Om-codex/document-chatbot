@@ -13,3 +13,20 @@ def load_document(file_path:str):
   # load pdf file
   if extension == ".pdf":
     loader = PyPDFLoader(str(path))
+  # load txt file
+  elif extenstion == ".txt":
+    loader = TextLoader(
+      str(path),
+      encoding ="utf-8"
+    )
+  # load docx file
+  elif extension == ".docx":
+    loader = Docx2txtLoader(str(path))
+  else:
+    raise ValueError(
+      f"Unsupported file format: {extenstion}"
+    )
+
+  documents = loader.load()
+
+  return documents
