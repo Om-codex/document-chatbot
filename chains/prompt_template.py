@@ -1,8 +1,8 @@
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 def get_rag_prompt():
 
-  prompt = PromptTemplate([
+  prompt = ChatPromptTemplate.from_messages([
     (
       "system",
       """
