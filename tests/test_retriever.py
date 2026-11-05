@@ -1,5 +1,5 @@
 from retrieval.retriever import get_retriever
-from vector_store.chroma_store import get_all_documents
+from vectorstore.chroma_store import get_all_documents
 
 # step 1: list available documents
 documents = get_all_documents()
