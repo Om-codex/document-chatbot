@@ -20,15 +20,24 @@ def format_docs(documents):
     )
 
 
-def get_qa_chain():
+def get_qa_chain(doc_ids : list[str] | None = None, k: int = 3):
 
-    retriever = get_retriever(k=3)
 
+    if doc_ids is not None and not doc_ids:
+        raise ValueError("doc_ids cannot be an empty list")
+
+    # initialize retriever
+    retriever = get_retriever(
+        k = k,
+        doc_ids = doc_ids
+    )
+
+    # initialize prompt and llm
     prompt = get_rag_prompt()
 
     llm = get_llm()
 
-    # Step 1: Retrieve documents
+    # Step 1: retrieve relevant documents alongside the question
     retrieval_chain = RunnableParallel({
         "question": RunnablePassthrough(),
         "documents": retriever
