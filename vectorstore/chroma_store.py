@@ -48,6 +48,35 @@ def add_documents(chunks):
 
   return ids
 
+def get_all_documents():
+
+  vector_store = get_vector_store()
+  result = vector_store.get(
+    include = ["metadatas"]
+  )
+
+  documents = {}
+
+  for metadata in result["metadatas"]:
+    doc_id = metadata.get("doc_id")
+
+    if not doc_id:
+      continue
+
+    if doc_id not in documents:
+
+      documents[doc_id] = {
+        "doc_id" : doc_id,
+        "filename" : metadata.get("filename"),
+        "total_pages" : metadata.get("total_pages"),
+        "total_chunks" : 0
+      }
+
+    documents[doc_id]["total_chunks"] += 1
+  
+  return list(documents.values())
+  
+
 def delete_documents(doc_id : str):
   vector_store = get_vector_store()
 
