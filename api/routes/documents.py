@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from ingestion.pipeline import ingest_document
-from vectorstore.chroma_store import add_documents
+from vectorstore.chroma_store import add_documents, get_all_documents
 
 router = APIRouter(
   prefix = "/api/documents",
@@ -108,4 +108,20 @@ def upload_document(file: UploadFile = File(...)):
     raise HTTPException(
       status_code = 500,
       detail = f"Document ingestion failed: {str(exc)}"
+    )
+
+@router.get("/")
+def list_documents():
+  try:
+    documents = get_all_documents()
+
+    return {
+      "total_documents" : len(documents),
+      "documents" : documents
+    }
+
+  except Exception as exc:
+    raise HTTPException(
+      status_code = 500,
+      detail = f"Failed to retrieve documents: {str(exc)}"
     )
