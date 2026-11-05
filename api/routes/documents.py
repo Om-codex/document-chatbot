@@ -3,8 +3,8 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from ingestion.pipeline import ingest_document
-from vectorstore.chroma_store import add_documents, get_all_documents
+from ingestion.pipeline import ingest_document, generate_document_id
+from vectorstore.chroma_store import add_documents, get_all_documents, delete_documents
 
 router = APIRouter(
   prefix = "/api/documents",
@@ -23,6 +23,8 @@ ALLOWED_EXTENSIONS = {".pdf",".docx",".txt"}
 # Maximum upload size : 10 MB
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
+
+# document upload endpoint
 @router.post("/upload")
 def upload_document(file: UploadFile = File(...)):
 
@@ -110,6 +112,7 @@ def upload_document(file: UploadFile = File(...)):
       detail = f"Document ingestion failed: {str(exc)}"
     )
 
+# document listing endpoint
 @router.get("/")
 def list_documents():
   try:
@@ -125,3 +128,74 @@ def list_documents():
       status_code = 500,
       detail = f"Failed to retrieve documents: {str(exc)}"
     )
+
+# document deletion endpoint
+@router.delete("/{doc_id}")
+def delete_document(doc_id: str):
+    try:
+        # 1. Check whether the document exists in ChromaDB
+        documents = get_all_documents()
+
+        document = next(
+            (
+                doc for doc in documents
+                if doc["doc_id"] == doc_id
+            ),
+            None
+        )
+
+        if document is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found."
+            )
+
+        # 2. Find original uploaded files using their content hash
+        matching_files = []
+
+        if UPLOAD_DIR.exists():
+            for file_path in UPLOAD_DIR.rglob("*"):
+                if not file_path.is_file():
+                    continue
+
+                try:
+                    file_hash = generate_document_id(str(file_path))
+
+                    if file_hash == doc_id:
+                        matching_files.append(file_path)
+
+                except OSError:
+                    continue
+
+        # 3. Delete document chunks from ChromaDB
+        delete_documents(doc_id)
+
+        # 4. Delete corresponding physical files
+        deleted_files = 0
+
+        for file_path in matching_files:
+            file_path.unlink()
+            deleted_files += 1
+
+            # Remove empty UUID upload directory
+            try:
+                file_path.parent.rmdir()
+            except OSError:
+                pass
+
+        return {
+            "message": "Document deleted successfully.",
+            "doc_id": doc_id,
+            "filename": document.get("filename"),
+            "deleted_files": deleted_files,
+            "vectors_deleted": True
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document deletion failed: {str(exc)}"
+        )
