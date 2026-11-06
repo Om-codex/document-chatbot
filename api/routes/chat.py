@@ -21,7 +21,6 @@ class ChatRequest(BaseModel):
 
   doc_ids: list[str] | None = Field(
     default = None,
-    min_length = 1,
     description = "Optional document IDs to search."
   )
 
@@ -45,9 +44,21 @@ def chat(request: ChatRequest):
     )
 
   try:
+
+    # normalize document IDs
+    doc_ids = [
+      doc_id.strip()
+      for doc_id in (request.doc_ids or [])
+      if doc_id.strip()
+    ]
+
+    # empty IDs means searching across all documents
+    if not doc_ids:
+      doc_ids = None
+
     # 1. initialize QA chain with option document filtering
     qa_chain = get_qa_chain(
-      doc_ids = request.doc_ids,
+      doc_ids = doc_ids,
       k = request.k
     )
 
