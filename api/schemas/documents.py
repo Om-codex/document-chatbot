@@ -24,7 +24,7 @@ class DocumentResponse(BaseModel):
 
 # Document listing Response schema
 
-class DocumentListReponse(BaseModel):
+class DocumentListResponse(BaseModel):
   
   total_documents : int = Field(
     ge = 0,
