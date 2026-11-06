@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes.documents import router as documents_router
+from api.routes.chat import router as chat_router
 
 # initialize fastapi application
 app = FastAPI(
@@ -18,7 +19,8 @@ app.add_middleware(
   allow_headers = ["*"]
 )
 
-app.include_router(documents_router)
+app.include_router(documents_router) # documents router
+app.include_router(chat_router) # chat router
 
 # root endpoint
 @app.get("/")

@@ -1,4 +1,4 @@
-# Secrets — never commit
+﻿# Secrets — never commit
 .env
 .env.*
 !.env.example
@@ -17,10 +17,11 @@ htmlcov/
 coverage.xml
 
 # Local data / generated artifacts
-chroma_db/*
-!chroma_db/.gitkeep
-data/uploaded_documents/*
-!data/uploaded_documents/.gitkeep
+data/chroma_db/*
+!data/chroma_db/.gitkeep
+
+data/uploads/*
+!data/uploads/.gitkeep
 
 # Logs
 *.log
