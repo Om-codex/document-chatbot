@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from api.schemas.chat import ChatRequest, ChatResponse
 
 from chains.qa_chain import get_qa_chain
 
@@ -12,27 +13,9 @@ router = APIRouter(
   tags = ["Chat"]
 )
 
-# request schema
-class ChatRequest(BaseModel):
-  question : str = Field(
-    min_length = 1,
-    description = "Question to ask about the uploaded documents."
-  )
-
-  doc_ids: list[str] | None = Field(
-    default = None,
-    description = "Optional document IDs to search."
-  )
-
-  k: int = Field(
-    default = 3,
-    ge = 1,
-    le = 20,
-    description = "Number of relevant chunks to retrieve."
-  )
 
 # Chat endpoint
-@router.post("/")
+@router.post("/", response_model = ChatResponse)
 def chat(request: ChatRequest):
 
   question = request.question.strip()
