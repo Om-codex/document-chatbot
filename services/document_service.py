@@ -10,7 +10,7 @@ from vectorstore.chroma_store import (add_documents, get_all_documents, delete_d
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-UPLOAD_FILE = BASE_DIR / "data" / "uploads"
+UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 
