@@ -1,6 +1,8 @@
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+import logging
+
 from api.schemas.documents import (
     DocumentListResponse,
     DocumentUploadResponse,
@@ -16,6 +18,7 @@ from services.document_service import (
     DocumentNotFoundError
 )
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/documents",
@@ -57,6 +60,7 @@ def upload_document_route(file: UploadFile = File(...)):
         )
 
     except Exception:
+        logger.exception("Document upload failed")
         raise HTTPException(
             status_code=500,
             detail="Document upload failed. Check backend logs."
@@ -77,6 +81,7 @@ def list_documents_route():
         return list_documents()
 
     except Exception:
+        logger.exception("Document listing failed.")
         raise HTTPException(
             status_code=500,
             detail="Failed to retrieve documents."
@@ -100,6 +105,7 @@ def delete_document_route(doc_id: str):
         )
 
     except Exception:
+        logger.exception("Document deletion failed.")
         raise HTTPException(
             status_code=500,
             detail="Document deletion failed. Check backend logs."
