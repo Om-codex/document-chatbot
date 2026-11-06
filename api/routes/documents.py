@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from api.schemas.documents import DocumentListReponse, DocumentUploadResponse, DocumentDeleteResponse
 
 from ingestion.pipeline import ingest_document, generate_document_id
 from vectorstore.chroma_store import add_documents, get_all_documents, delete_documents
@@ -25,7 +26,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 # document upload endpoint
-@router.post("/upload")
+@router.post("/upload", response_model = DocumentUploadResponse)
 def upload_document(file: UploadFile = File(...)):
 
   if not file.filename:
@@ -113,7 +114,7 @@ def upload_document(file: UploadFile = File(...)):
     )
 
 # document listing endpoint
-@router.get("/")
+@router.get("/", response_model = DocumentListReponse)
 def list_documents():
   try:
     documents = get_all_documents()
@@ -130,7 +131,7 @@ def list_documents():
     )
 
 # document deletion endpoint
-@router.delete("/{doc_id}")
+@router.delete("/{doc_id}", response_model = DocumentDeleteResponse)
 def delete_document(doc_id: str):
     try:
         # 1. Check whether the document exists in ChromaDB
