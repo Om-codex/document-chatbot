@@ -1,13 +1,14 @@
 from langchain_huggingface import HuggingFaceEmbeddings
+from config.settings import settings
 
 def get_embedding_model():
   embedding_model = HuggingFaceEmbeddings(
-    model_name = "sentence-transformers/all-MiniLM-L6-v2",
+    model_name = settings.embedding_model_name,
     model_kwargs = {
-      "device": "cpu"
+      "device": settings.embedding_device
     },
     encode_kwargs = {
-      "normalize_embeddings": True
+      "normalize_embeddings": settings.normalize_embeddings
     }
   )
 
