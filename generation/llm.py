@@ -1,13 +1,18 @@
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
 
-load_dotenv()
+from langchain_groq import ChatGroq
+from config.settings import settings
+
 
 def get_llm():
-  llm = ChatGroq(
-    model = "openai/gpt-oss-20b",
-    temperature = 0,
-    max_retries = 2
-  )
 
-  return llm
+    if settings.groq_api_key is None:
+        raise ValueError("GROQ_API_KEY is not configured.")
+
+    llm = ChatGroq(
+        model=settings.llm_model,
+        temperature=settings.llm_temperature,
+        max_retries=settings.llm_max_retries,
+        api_key=settings.groq_api_key.get_secret_value()
+    )
+
+    return llm
