@@ -1,6 +1,6 @@
 from chains.qa_chain import get_qa_chain
 
-def chat_with_documents(question : str, doc_id : int, k : int) -> dict:
+def chat_with_documents(question : str, doc_ids : int, k : int) -> dict:
   question = question.strip()
 
   if not question:
