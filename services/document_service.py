@@ -5,16 +5,15 @@ from typing import BinaryIO
 
 from ingestion.pipeline import (ingest_document, generate_document_id)
 from vectorstore.chroma_store import (add_documents, get_all_documents, delete_documents)
+from config.settings import settings
 
 # configuration
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+UPLOAD_DIR = settings.upload_directory
 
-UPLOAD_DIR = BASE_DIR / "data" / "uploads"
+ALLOWED_EXTENSIONS = settings.allowed_extensions
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
-
-MAX_FILE_SIZE = 10 * 1024 * 1024 # 10 MB
+MAX_FILE_SIZE = settings.max_file_size_bytes
 
 # Application-level exceptions
 
