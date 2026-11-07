@@ -1,12 +1,13 @@
 from pathlib import Path
 from langchain_chroma import Chroma
 from embeddings.embedding_model import get_embedding_model
+from config.settings import settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-CHROMA_PATH = BASE_DIR / "data" / "chroma_db"
+CHROMA_PATH = settings.chroma_persist_directory
 
-COLLECTION_NAME = "document_collection_v2"
+COLLECTION_NAME = settings.chroma_collection_name
 
 def get_vector_store():
   embedding_model = get_embedding_model()
