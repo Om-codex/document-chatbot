@@ -1,76 +1,91 @@
 
-from functools import lru_cache
 from pathlib import Path
+from functools import cached_property
 
-from pydantic import Field, model_validator
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# config/settings.py -> config -> project root
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# -----------------------------------------
+# Project Configuration
+# -----------------------------------------
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
 
+    # Load environment variables from project root
     model_config = SettingsConfigDict(
-        env_file=PROJECT_ROOT / ".env",
+        env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
-        extra="ignore",
+        extra="ignore"
     )
 
-    # Application paths
-    project_root: Path = PROJECT_ROOT
+    # -------------------------------------
+    # Application
+    # -------------------------------------
 
-    upload_dir: Path = PROJECT_ROOT / "data" / "uploaded_docs"
+    app_name: str = "Document Chatbot API"
+    app_version: str = "1.0.0"
 
-    chroma_dir: Path = PROJECT_ROOT / "chroma_db"
+    # -------------------------------------
+    # LLM Configuration
+    # -------------------------------------
 
-    # Document ingestion
-    chunk_size: int = Field(default=1000, gt=0)
+    groq_api_key: SecretStr | None = None
 
-    chunk_overlap: int = Field(default=200, ge=0)
+    llm_model: str = "openai/gpt-oss-20b"
+    llm_temperature: float = 0.0
+    llm_max_retries: int = 2
 
-    supported_extensions: tuple[str, ...] = (
+    # -------------------------------------
+    # Embedding Configuration
+    # -------------------------------------
+
+    embedding_model_name: str = (
+        "sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+    embedding_device: str = "cpu"
+    normalize_embeddings: bool = True
+
+    # -------------------------------------
+    # ChromaDB Configuration
+    # -------------------------------------
+
+    chroma_collection_name: str = "document_collection_v2"
+
+    @cached_property
+    def chroma_persist_directory(self) -> Path:
+        return BASE_DIR / "data" / "chroma_db"
+
+    # -------------------------------------
+    # Text Splitting Configuration
+    # -------------------------------------
+
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
+
+    # -------------------------------------
+    # Document Upload Configuration
+    # -------------------------------------
+
+    @cached_property
+    def upload_directory(self) -> Path:
+        return BASE_DIR / "data" / "uploads"
+
+    max_file_size_bytes: int = 10 * 1024 * 1024
+
+    allowed_extensions: set[str] = {
         ".pdf",
-        ".txt",
         ".docx",
-    )
-
-    # Upload limits
-    max_file_size_mb: int = Field(default=20, gt=0)
-
-    @model_validator(mode="after")
-    def validate_chunk_configuration(self):
-        if self.chunk_overlap >= self.chunk_size:
-            raise ValueError(
-                "chunk_overlap must be smaller than chunk_size"
-            )
-
-        return self
-
-    @model_validator(mode="after")
-    def resolve_paths(self):
-        # Resolve relative paths against project root.
-        root = self.project_root.expanduser().resolve()
-
-        self.project_root = root
-
-        for field_name in ("upload_dir", "chroma_dir"):
-            path = getattr(self, field_name).expanduser()
-
-            if not path.is_absolute():
-                path = root / path
-
-            setattr(self, field_name, path.resolve())
-
-        return self
-
-    def ensure_directories(self) -> None:
-        """Create application storage directories when needed."""
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
-        self.chroma_dir.mkdir(parents=True, exist_ok=True)
+        ".txt"
+    }
 
 
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    return Settings()
+# -----------------------------------------
+# Global Settings Instance
+# -----------------------------------------
+
+settings = Settings()
