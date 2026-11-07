@@ -16,7 +16,7 @@ def generate_document_id(file_path: str) -> str:
 
 
 
-def ingest_document(file_path: str, chunk_size: int = 1000, chunk_overlap: int = 200):
+def ingest_document(file_path: str, chunk_size: int | None = None, chunk_overlap: int | None = None):
 
   path = Path(file_path)
   
