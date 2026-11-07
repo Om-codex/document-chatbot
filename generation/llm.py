@@ -1,8 +1,9 @@
+from functools import lru_cache
 
 from langchain_groq import ChatGroq
 from config.settings import settings
 
-
+@lru_cache(maxsize = 1)
 def get_llm():
 
     if settings.groq_api_key is None:
