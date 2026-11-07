@@ -1,14 +1,15 @@
-from pathlib import Path
 from langchain_chroma import Chroma
 from embeddings.embedding_model import get_embedding_model
 from config.settings import settings
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+from functools import lru_cache
+
 
 CHROMA_PATH = settings.chroma_persist_directory
 
 COLLECTION_NAME = settings.chroma_collection_name
 
+@lru_cache(maxsize = 1)
 def get_vector_store():
   embedding_model = get_embedding_model()
 
