@@ -189,6 +189,42 @@ button:disabled {
   box-shadow: var(--shadow-sm);
 }
 
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.github-link svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.github-link:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.github-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
 .theme-icon {
   width: 17px;
   height: 17px;
@@ -1336,6 +1372,15 @@ button:disabled {
 
   .pill {
     max-width: 200px;
+  }
+
+  .github-link {
+    width: 32px;
+    padding: 0;
+  }
+
+  .github-link span {
+    display: none;
   }
 
   .chat-head {
