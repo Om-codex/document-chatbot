@@ -1,28 +1,35 @@
-
-from fastapi import APIRouter, File, HTTPException, UploadFile
-
 import logging
 
+from fastapi import APIRouter, File, Path, UploadFile
+
+from api.errors import api_error
 from api.schemas.documents import (
+    DocumentDeleteResponse,
     DocumentListResponse,
     DocumentUploadResponse,
-    DocumentDeleteResponse
 )
-
 from services.document_service import (
-    upload_document,
-    list_documents,
     delete_document,
-    UnsupportedDocumentError,
+    list_documents,
+    upload_document,
+)
+from services.exceptions import (
+    DocumentDeletionError,
+    DocumentNotFoundError,
+    DocumentServiceError,
+    DocumentStorageError,
     DocumentTooLargeError,
-    DocumentNotFoundError
+    EmptyDocumentError,
+    InvalidDocumentIdError,
+    MalformedDocumentError,
+    UnsupportedDocumentError,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/documents",
-    tags=["Documents"]
+    tags=["Documents"],
 )
 
 
@@ -30,41 +37,36 @@ router = APIRouter(
 # Upload Document
 # -----------------------------------------
 
-@router.post("/upload",response_model=DocumentUploadResponse)
+@router.post("/upload", response_model=DocumentUploadResponse)
 def upload_document_route(file: UploadFile = File(...)):
-
     try:
-        result = upload_document(
+        return upload_document(
             filename=file.filename,
-            file_stream=file.file
+            file_stream=file.file,
         )
-
-        return result
 
     except UnsupportedDocumentError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc)
-        )
+        raise api_error(415, "INVALID_FILE_TYPE", str(exc))
 
     except DocumentTooLargeError as exc:
-        raise HTTPException(
-            status_code=413,
-            detail=str(exc)
-        )
+        raise api_error(413, "FILE_TOO_LARGE", str(exc))
+
+    except EmptyDocumentError as exc:
+        raise api_error(422, "EMPTY_DOCUMENT", str(exc))
+
+    except MalformedDocumentError as exc:
+        raise api_error(422, "MALFORMED_DOCUMENT", str(exc))
+
+    except DocumentStorageError as exc:
+        logger.exception("Document storage failed.")
+        raise api_error(503, "STORAGE_ERROR", str(exc))
 
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc)
-        )
+        raise api_error(400, "INVALID_REQUEST", str(exc))
 
     except Exception:
-        logger.exception("Document upload failed")
-        raise HTTPException(
-            status_code=500,
-            detail="Document upload failed. Check backend logs."
-        )
+        logger.exception("Document upload failed.")
+        raise api_error(500, "INTERNAL_ERROR", "Document upload failed.")
 
     finally:
         file.file.close()
@@ -74,39 +76,49 @@ def upload_document_route(file: UploadFile = File(...)):
 # List Documents
 # -----------------------------------------
 
-@router.get("/",response_model=DocumentListResponse)
+@router.get("/", response_model=DocumentListResponse)
 def list_documents_route():
-
     try:
         return list_documents()
 
+    except DocumentStorageError as exc:
+        logger.exception("Document listing failed.")
+        raise api_error(503, "STORAGE_ERROR", str(exc))
+
     except Exception:
         logger.exception("Document listing failed.")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to retrieve documents."
-        )
+        raise api_error(500, "INTERNAL_ERROR", "Failed to retrieve documents.")
 
 
 # -----------------------------------------
 # Delete Document
 # -----------------------------------------
 
-@router.delete("/{doc_id}",response_model=DocumentDeleteResponse)
-def delete_document_route(doc_id: str):
-
+@router.delete("/{doc_id}", response_model=DocumentDeleteResponse)
+def delete_document_route(
+    doc_id: str = Path(
+        ...,
+        pattern=r"^[a-f0-9]{64}$",
+        description="64-character lowercase SHA-256 document ID.",
+    ),
+):
     try:
         return delete_document(doc_id)
 
     except DocumentNotFoundError as exc:
-        raise HTTPException(
-            status_code=404,
-            detail=str(exc)
-        )
+        raise api_error(404, "DOCUMENT_NOT_FOUND", str(exc))
+
+    except InvalidDocumentIdError as exc:
+        raise api_error(400, "INVALID_DOCUMENT_ID", str(exc))
+
+    except DocumentDeletionError as exc:
+        logger.exception("Document deletion failed.")
+        raise api_error(500, "DELETION_ERROR", str(exc))
+
+    except DocumentServiceError as exc:
+        logger.exception("Document deletion failed.")
+        raise api_error(500, "DELETION_ERROR", str(exc))
 
     except Exception:
         logger.exception("Document deletion failed.")
-        raise HTTPException(
-            status_code=500,
-            detail="Document deletion failed. Check backend logs."
-        )
+        raise api_error(500, "INTERNAL_ERROR", "Document deletion failed.")

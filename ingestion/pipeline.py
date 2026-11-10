@@ -1,43 +1,61 @@
 import hashlib
+import logging
 from pathlib import Path
 
+from ingestion.exceptions import EmptyDocumentError
 from ingestion.loaders import load_document
 from ingestion.text_splitter import split_documents
 
+logger = logging.getLogger(__name__)
+
+
 def generate_document_id(file_path: str) -> str:
-  
-  file_hash = hashlib.sha256()
-  with open(file_path, "rb") as file:
+    """Return the SHA-256 hex digest of the file contents."""
 
-    for chunk in iter(lambda: file.read(8192), b""):
-      file_hash.update(chunk)
+    file_hash = hashlib.sha256()
 
-  return file_hash.hexdigest()
+    with open(file_path, "rb") as file:
+        for chunk in iter(lambda: file.read(8192), b""):
+            file_hash.update(chunk)
+
+    return file_hash.hexdigest()
 
 
+def ingest_document(
+    file_path: str,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+):
+    """Load, split and annotate a document for vector storage."""
 
-def ingest_document(file_path: str, chunk_size: int | None = None, chunk_overlap: int | None = None):
+    path = Path(file_path)
 
-  path = Path(file_path)
-  
-  if not path.is_file():
-    raise FileNotFoundError(f"File not found: {file_path}")
+    if not path.is_file():
 
-  # generate the document id
-  doc_id = generate_document_id(str(path))
+        raise FileNotFoundError(f"File not found: {file_path}")
 
-  # load documents
-  documents = load_document(str(path))
+    doc_id = generate_document_id(str(path))
 
-  # split documents into chunks
-  chunks = split_documents(documents,chunk_size,chunk_overlap)
+    documents = load_document(str(path))
+    chunks = split_documents(documents, chunk_size, chunk_overlap)
 
-  # assign the metadata
-  for index, chunk in enumerate(chunks):
-    chunk.metadata.update({
-      "doc_id" : doc_id,
-      "filename" : path.name,
-      "chunk_index" : index
-    })
+    if not chunks:
+        raise EmptyDocumentError("No text could be extracted from the document.")
 
-  return chunks
+    for index, chunk in enumerate(chunks):
+        chunk.metadata.update(
+            {
+                "doc_id": doc_id,
+                "filename": path.name,
+                "chunk_index": index,
+            }
+        )
+
+    logger.info(
+        "Ingestion completed: filename=%s doc_id=%s chunks=%d",
+        path.name,
+        doc_id[:12],
+        len(chunks),
+    )
+
+    return chunks
