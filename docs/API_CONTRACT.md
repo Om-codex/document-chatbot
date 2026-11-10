@@ -1,197 +1,185 @@
 # API Contract — Document Chatbot
 
-Single source of truth for the FastAPI backend and the static frontend.
-Backend base URL: `http://127.0.0.1:8000`. All API routes live under `/api` so the
-frontend can be mounted at `/` without route conflicts.
+Source of truth for the FastAPI backend and the static frontend.
+Backend base URL: `http://127.0.0.1:8000`. All API routes live under `/api`; the
+frontend is served from `/app` by the same process.
 
-- Content type: JSON for everything except file upload (`multipart/form-data`).
-- The frontend never receives provider API keys; all model calls happen server-side.
-- Timestamps are ISO-8601 UTC strings.
-- Field names are snake_case everywhere (matches Python and JSON).
+- Content type: JSON for everything except upload (`multipart/form-data`).
+- The browser never receives provider API keys; all model calls are server-side.
+- Field names are snake_case everywhere.
+- Document IDs are 64-character lowercase SHA-256 hex strings.
 
 ---
 
 ## 1. Error envelope
 
-Every non-2xx response written by our own code uses:
+Every error written by application code uses:
 
 ```json
 {
   "detail": {
     "code": "INVALID_FILE_TYPE",
-    "message": "Unsupported file type: .exe",
-    "details": { "filename": "notes.exe", "allowed": [".pdf", ".txt", ".md", ".docx"] }
+    "message": "Unsupported file format. Upload PDF, DOCX, or TXT.",
+    "details": null
   }
 }
 ```
 
-`details` is optional. The only exception is FastAPI's automatic request-validation
-error, which returns `{"detail": [ ... ]}`. The frontend's `api.js` normalizes both
-shapes, but the backend should override the validation handler (M5) so clients see
-one shape.
+`details` is optional. FastAPI request-validation failures are normalized by a
+global handler to:
+
+```json
+{
+  "detail": {
+    "code": "VALIDATION_ERROR",
+    "message": "The request body or parameters are invalid.",
+    "details": [{ "loc": ["body", "question"], "msg": "...", "type": "..." }]
+  }
+}
+```
 
 | HTTP | `code` | Meaning |
 |---|---|---|
-| 400 | `NO_FILES` | Upload request contained no files |
-| 400 | `NO_DOCUMENTS_SELECTED` | Chat asked for a subset but sent an empty list |
-| 400 | `NO_DOCUMENTS` | Collection is empty; ingest something first |
 | 400 | `INVALID_REQUEST` | Generic bad input |
-| 401 | `LLM_AUTH_ERROR` | Missing/invalid `GROQ_API_KEY` (server-side only) |
+| 400 | `NO_DOCUMENTS` | Collection is empty; ingest something first |
+| 400 | `INVALID_DOCUMENT_SELECTION` | One or more selected `doc_ids` are no longer indexed |
+| 400 | `INVALID_DOCUMENT_ID` | Malformed `doc_id` |
 | 404 | `DOCUMENT_NOT_FOUND` | Unknown `doc_id` |
 | 413 | `FILE_TOO_LARGE` | Per-file limit exceeded |
-| 415 | `INVALID_FILE_TYPE` | Extension not allowed |
-| 422 | `EMPTY_DOCUMENT` | Empty text or unreadable file |
-| 429 | `LLM_RATE_LIMIT` | Groq rate limit; includes `Retry-After` header and `details.retry_after` |
-| 500 | `EMBEDDING_ERROR` | Embedding/vector-store failure |
-| 500 | `INTERNAL_ERROR` | Unexpected failure (never leak stack traces/keys) |
+| 415 | `INVALID_FILE_TYPE` | Extension or signature not allowed |
+| 422 | `EMPTY_DOCUMENT` | Empty or text-less file |
+| 422 | `MALFORMED_DOCUMENT` | File could not be parsed / signature mismatch |
+| 422 | `VALIDATION_ERROR` | Pydantic request validation |
+| 429 | `LLM_RATE_LIMIT` | Groq rate limit; includes `Retry-After` and `details.retry_after` |
+| 500 | `DELETION_ERROR` | Vector or file deletion failed unexpectedly |
+| 500 | `CHAT_ERROR` | Unexpected chat-service failure |
+| 500 | `INTERNAL_ERROR` | Unexpected failure (never leaks stack traces/keys) |
 | 502 | `LLM_PROVIDER_ERROR` | Groq returned an error |
+| 503 | `STORAGE_ERROR` | Vector store write/read failure |
+| 503 | `RETRIEVAL_ERROR` | Retrieval pipeline failure |
+| 503 | `LLM_NOT_CONFIGURED` | Missing `GROQ_API_KEY` |
 | 504 | `LLM_TIMEOUT` | Model call exceeded `LLM_TIMEOUT_SECONDS` |
 
-Uploads are **per-file tolerant**: one bad file must not fail the whole request.
-Per-file problems are reported inside a 200/422 response (see §4).
+Uploads are **per-request**: one file per request. The frontend uploads multiple
+files sequentially and reports failures per file.
 
 ---
 
 ## 2. `GET /api/health`
 
-Cheap readiness check; no model invocation.
+Cheap readiness check; does not load the embedding model or call the LLM.
 
 ```json
 {
   "status": "ok",
-  "llm_model": "openai/gpt-oss-120b",
+  "app_name": "Document Chatbot API",
+  "app_version": "1.0.0",
+  "llm_model": "openai/gpt-oss-20b",
   "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-  "collection": "document_chatbot",
-  "document_count": 3
+  "collection": "document_collection_v2",
+  "document_count": 1
 }
 ```
 
-`status` is `"ok"` or `"degraded"`. Return `503` only if the app is not ready to
-serve at all (e.g. vector store could not be opened). Never include secrets.
+`status` is `"ok"` or `"degraded"` (vector store could not be read). The endpoint
+still returns `200` when degraded; `document_count` may be `null`.
 
 ---
 
-## 3. `GET /api/documents`
+## 3. `GET /api/documents/`
 
 ```json
 {
+  "total_documents": 1,
   "documents": [
     {
-      "doc_id": "9f2c1a7b3d40",
+      "doc_id": "6f1c...64 hex chars...",
       "filename": "lecture-01.pdf",
-      "source_type": "pdf",
-      "chunk_count": 42,
-      "page_count": 12,
-      "size_bytes": 1048576,
-      "created_at": "2026-11-03T09:15:00Z"
+      "total_pages": 12,
+      "total_chunks": 42
     }
   ]
 }
 ```
 
-`source_type` is one of `pdf`, `txt`, `markdown`, `docx`, `text`.
-`page_count` is `null` for txt/markdown/docx/text. `doc_id` is a stable
-content-derived identifier (see `docs/DECISIONS.md`, ADR-4).
+- `total_pages` is `null` for TXT and DOCX.
+- `total_chunks` is the number of vectors currently stored for the document.
+- `doc_id` is the SHA-256 of the original file bytes (content-addressed).
 
 ---
 
 ## 4. `POST /api/documents/upload`
 
-`multipart/form-data`, field name **`files`** (repeat the field for multiple files).
-Limits: 20 MB per file, 10 files per request, 50 MB total.
+`multipart/form-data`, field name **`file`** (one file per request).
 
-Allowed extensions: `.pdf`, `.txt`, `.md`, `.docx` (case-insensitive).
-The backend must validate extension **and magic bytes**, and sanitize filenames
-(path traversal, control characters) before writing to disk.
+Limits: 10 MB per file (`MAX_FILE_SIZE_BYTES`).
+Allowed extensions: `.pdf`, `.txt`, `.docx` (case-insensitive); the signature is
+validated before ingestion and filenames are sanitized.
 
-Response `200` (partial success is normal):
+Response `200`:
 
 ```json
 {
-  "documents": [
-    {
-      "doc_id": "9f2c1a7b3d40",
-      "filename": "lecture-01.pdf",
-      "source_type": "pdf",
-      "chunk_count": 42,
-      "page_count": 12,
-      "size_bytes": 1048576,
-      "created_at": "2026-11-03T09:15:00Z"
-    }
-  ],
-  "errors": [
-    {
-      "filename": "notes.exe",
-      "code": "INVALID_FILE_TYPE",
-      "message": "Unsupported file type: .exe"
-    }
-  ]
+  "message": "Document uploaded and indexed successfully.",
+  "filename": "lecture-01.pdf",
+  "doc_id": "6f1c...64 hex chars...",
+  "total_chunks": 42,
+  "file_size_bytes": 1048576
 }
 ```
 
 Rules:
 
-- Duplicate content (same `doc_id`) → `errors[]` entry with code
-  `DUPLICATE_DOCUMENT`; nothing is re-embedded.
-- `documents` may be empty when every file failed, but the status stays `200`
-  so the UI can display the per-file reasons. A completely malformed request
-  (no `files` field) returns `400 NO_FILES`.
-- Ingestion is synchronous in v1: the response returns only after chunks are
-  stored. Expect a few seconds for large PDFs (local embeddings on CPU).
+- Ingestion is synchronous: the response returns after chunks are embedded and
+  stored.
+- Re-uploading identical bytes is idempotent: new chunks are upserted first and
+  stale chunk IDs are removed afterwards, so a failure cannot delete the previous
+  working version.
+- A failed brand-new upload cleans up its partial vectors and UUID directory.
 
 ---
 
-## 5. `POST /api/documents/text`
+## 5. `DELETE /api/documents/{doc_id}`
 
-For the "Paste text" dialog. JSON body:
+`doc_id` must match `^[a-f0-9]{64}$`.
+
+Deletes vectors first, then any stored files whose content hash matches. If file
+deletion fails after vectors are gone, the endpoint still returns `200` and lists
+the problem in `warnings`.
 
 ```json
-{ "title": "Meeting notes", "content": "..." }
+{
+  "message": "Document deleted successfully.",
+  "doc_id": "6f1c...",
+  "filename": "lecture-01.pdf",
+  "deleted_files": 1,
+  "vectors_deleted": true,
+  "warnings": []
+}
 ```
 
-- `title`: 1–120 characters, used as `filename` and in citations.
-- `content`: 1–100,000 characters.
-- Runs the same chunk → embed → store pipeline with `source_type: "text"` and
-  `page_count: null`.
-
-Response `201`:
-
-```json
-{ "document": { "doc_id": "...", "filename": "Meeting notes", "source_type": "text", "chunk_count": 3, "page_count": null, "size_bytes": 812, "created_at": "..." } }
-```
+- `404 DOCUMENT_NOT_FOUND` if the document is not indexed.
+- The UI treats a 404 on delete as "already gone".
 
 ---
 
-## 6. `DELETE /api/documents/{doc_id}`
-
-Deletes the stored original file, all chunks/vectors for that `doc_id`, and any
-document registry row.
-
-- `200` → `{ "deleted": true, "doc_id": "9f2c1a7b3d40" }`
-- `404` → `DOCUMENT_NOT_FOUND`
-
-Deletion must be idempotent from the client's point of view: if the UI double-clicks,
-the second call may return 404 and the UI treats it as "already gone".
-
----
-
-## 7. `POST /api/chat`
+## 6. `POST /api/chat/`
 
 JSON body:
 
 ```json
 {
   "question": "What does chapter 3 say about caching?",
-  "document_ids": null,
-  "top_k": 4
+  "doc_ids": null,
+  "k": 3
 }
 ```
 
 | Field | Rules |
 |---|---|
-| `question` | 1–2,000 characters, required |
-| `document_ids` | `null`/absent = search **all** documents. A non-empty array = search only those docs. `[]` → `400 NO_DOCUMENTS_SELECTED`. Unknown ids → `400 INVALID_REQUEST` (or `404`) |
-| `top_k` | optional, 1–10; defaults to `TOP_K` from settings |
+| `question` | 1–4,000 characters, trimmed, required |
+| `doc_ids` | `null`/omitted = search **all** documents. A non-empty array of 64-char IDs = search only those. `[]` is treated as "all" for backward compatibility |
+| `k` | optional, 1–20; defaults to `DEFAULT_TOP_K` (3) |
 
 Single-turn in v1: no conversation history is sent or stored.
 
@@ -199,92 +187,92 @@ Response `200`:
 
 ```json
 {
+  "question": "What does chapter 3 say about caching?",
   "answer": "Chapter 3 describes a write-through cache ... [1]",
-  "sources": [
+  "total_chunks_retrieved": 2,
+  "retrieved_chunks": [
     {
-      "doc_id": "9f2c1a7b3d40",
-      "filename": "lecture-01.pdf",
-      "page": 7,
-      "chunk_index": 18,
-      "score": 0.82,
-      "snippet": "A write-through cache writes to ..."
+      "chunk_id": "6f1c..._18",
+      "content": "A write-through cache writes to the cache and the backing store.",
+      "metadata": {
+        "doc_id": "6f1c...",
+        "filename": "lecture-01.pdf",
+        "chunk_index": 18,
+        "page": 6,
+        "page_number": 7,
+        "page_label": null,
+        "total_pages": 12
+      }
     }
-  ],
-  "model": "openai/gpt-oss-120b"
+  ]
 }
 ```
 
-- `score` = **cosine similarity** in `[-1, 1]`, higher is more similar.
-  Do not expose raw Chroma distances in the API; convert once at the boundary.
-- `page` is a number for PDFs, `null` for text-like sources.
-- `snippet` is at most ~300 characters of the retrieved chunk (do not return the
-  full chunk; the UI only needs enough to recognize the source).
-- `sources` may be empty if the retriever found nothing; `answer` should then be
-  an explicit "not found in the provided documents" message.
-- `429` responses include `Retry-After` (seconds) and
-  `detail.details.retry_after`.
-- The backend must not forward the raw Groq error body (it can contain internal
-  request metadata).
+- `retrieved_chunks` may be empty. The LLM is then skipped and `answer` is the
+  deterministic no-context message.
+- `page` is zero-based (loader metadata); `page_number` is one-based for display.
+- `429` responses include `Retry-After` and `detail.details.retry_after`.
+- Raw provider error bodies are never forwarded.
 
 ---
 
-## 8. Frontend mapping
+## 7. Frontend mapping
 
 | UI action | Request |
 |---|---|
-| Load page | `GET /api/health` + `GET /api/documents` (parallel) |
-| Drop / choose files | `POST /api/documents/upload` (FormData, `files`) |
-| Paste text → Save | `POST /api/documents/text` |
+| Load page | `GET /api/health` + `GET /api/documents/` (parallel) |
+| Drop / choose files | `POST /api/documents/upload` once per file, field `file` |
+| Paste text → Save | Build a `.txt` `File` and upload it through the same endpoint |
 | Trash icon | `DELETE /api/documents/{doc_id}` |
-| "All documents" scope | `POST /api/chat` with `document_ids: null` |
-| Specific selection | `POST /api/chat` with `document_ids: [...]` |
+| "All documents" scope | `POST /api/chat/` with `doc_ids: null` |
+| Specific selection | `POST /api/chat/` with `doc_ids: [...]` |
+| Sources selector | `POST /api/chat/` with `k: 1..10` |
 
-The frontend ships with a mock adapter (`frontend/js/mock.js`) that implements the
-same method signatures, so the UI works before the backend exists. Switch it with
-`frontend/js/config.js` (`useMock: false`) or the URL flag `?mock=0`.
+The UI uses the real API by default. Append `?mock=1` to use
+`frontend/js/mock.js` without a backend; `?apiBase=http://127.0.0.1:8000` points a
+cross-origin UI at the API.
 
 ---
 
-## 9. Mock adapter behavior (M1 only)
+## 8. Mock adapter behavior
 
-- Seeds two documents: `lecture-notes.pdf` (pdf, 12 chunks, 4 pages) and
-  `getting-started.md` (markdown, 5 chunks).
-- Uploads accept the four allowed extensions; a filename containing `fail`
-  produces a `INVALID_FILE_TYPE`-style per-file error to demo partial failures.
-- Questions containing `rate limit` return a `429 LLM_RATE_LIMIT` to demo the
-  retry path. Any other question returns a canned grounded answer with two
-  citations from the current selection.
+- Seeds two documents: `lecture-notes.pdf` (12 chunks, 4 pages) and
+  `getting-started.txt` (5 chunks).
+- Upload accepts `.pdf`, `.txt`, `.docx`; a filename containing `fail` produces an
+  upload error to demo per-file failures.
+- A question containing `rate limit` returns `429 LLM_RATE_LIMIT` with
+  `retry_after: 5`.
+- Any other question returns a canned grounded answer and mock retrieved chunks.
 - Latency is simulated (~600 ms) so loading states are visible.
 
 ---
 
-## 10. Curl examples (PowerShell)
+## 9. Curl examples (PowerShell)
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/health
+Invoke-RestMethod http://127.0.0.1:8000/api/documents/
 
 curl.exe -X POST http://127.0.0.1:8000/api/documents/upload `
-  -F "files=@C:\path\lecture.pdf" `
-  -F "files=@C:\path\notes.md"
+  -F "file=@C:\path\lecture.pdf"
 
-Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/chat `
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/chat/ `
   -ContentType 'application/json' `
-  -Body '{"question":"What is the main topic?","document_ids":null}'
+  -Body '{"question":"What is the main topic?","doc_ids":null,"k":3}'
 
-Invoke-RestMethod -Method Delete http://127.0.0.1:8000/api/documents/9f2c1a7b3d40
+Invoke-RestMethod -Method Delete http://127.0.0.1:8000/api/documents/<64-hex-doc-id>
 ```
 
 ---
 
-## 11. Serving the frontend (M6)
+## 10. Serving the frontend
 
-Recommended: same origin, no CORS.
+Same origin, no CORS required:
 
 ```python
-# app.py — after all /api routes are declared
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/app", StaticFiles(directory="frontend", html=True), name="frontend")
 ```
 
-Mounting at `/` must be the **last** statement, because Starlette matches routes
-in order. Avoid adding `CORSMiddleware` if the UI is served this way. If you
-instead run the UI from `http://127.0.0.1:5500`, allow exactly that origin.
+The mount is declared **after** all `/api` routes and the root endpoint because
+Starlette matches routes in declaration order. To run the UI from a separate dev
+server, allow-list that origin in `CORS_ALLOW_ORIGINS`.

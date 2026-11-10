@@ -10,9 +10,9 @@ Environment verified on 2026-11-03: Windows, Python 3.13.14, venv in
 
 ## ADR-1 — Groq for chat, local Hugging Face embeddings
 
-**Decision:** `ChatGroq` (`openai/gpt-oss-120b`) for generation; local
-`sentence-transformers/all-MiniLM-L6-v2` (384-dim) through
-`langchain-huggingface` for embeddings.
+**Decision:** `ChatGroq` (`openai/gpt-oss-20b` by default, temperature 0, 2
+retries) for generation; local `sentence-transformers/all-MiniLM-L6-v2`
+(384-dim) through `langchain-huggingface` for embeddings.
 
 **Why:** free chat inference with no card, and embeddings that run offline after a
 one-time ~90 MB download. No second API key, no per-chunk embedding cost, and
@@ -24,9 +24,9 @@ CPU).
 
 **Consequences:**
 - Groq's free tier is 30 req/min, 1,000 req/day, **8K tokens/min**, 200K tokens/day.
-  Keep `TOP_K=4`, chunk size ~1,000 chars, concise answers, and back off on `429`.
+  Keep `DEFAULT_TOP_K=3`, chunk size ~1,000 chars, concise answers, and back off on `429`.
 - Llama models left Groq's free tier in Aug 2026; do not default to
-  `llama-3.3-70b-versatile`. Use `openai/gpt-oss-120b` or `openai/gpt-oss-20b`.
+  `llama-3.3-70b-versatile`. Use `openai/gpt-oss-20b` or `openai/gpt-oss-120b`.
 - Embedding runs on CPU; ingestion of a large PDF takes seconds. This is why the
   upload endpoint is synchronous in v1 and why the UI shows an ingestion state.
 - `torch`/`sentence-transformers` add ~1 GB to the venv. Verified installable on
@@ -61,32 +61,33 @@ available next to the parsed answer. `langchain-community` still pulls
 
 ---
 
-## ADR-3 — Chroma with cosine distance fixed at collection creation
+## ADR-3 — Chroma distance metric and normalized embeddings
 
-**Decision:** create the collection with
-`collection_metadata={"hnsw:space": "cosine"}` and embed with
-`normalize_embeddings=True`.
+**Decision:** embed with `normalize_embeddings=True` and let Chroma create the
+collection with its default (L2) index. Retrieval uses LangChain's `similarity`
+search; the API returns the retrieved chunks themselves and does **not** expose a
+distance or score.
 
-**Why:** Chroma's default space is L2; distance semantics differ between metrics.
-Cosine on normalized vectors gives an interpretable similarity (`1 - distance`) for
-the `score` field. The space cannot be changed after creation — it is baked into the
-HNSW index.
+**Why:** normalizing vectors keeps retrieval stable across models, and the UI only
+needs the passage plus its metadata to cite it. Exposing a raw Chroma distance
+without a documented metric caused confusion in the original contract (it assumed
+cosine similarity and a `score` field that the implementation never produced).
 
 **Consequences:**
-- Changing `EMBEDDING_MODEL` changes vector dimensions; Chroma will reject inserts.
-  Use a new `COLLECTION_NAME` (e.g. suffix with the model) or delete `chroma_db/`
-  and re-ingest. Add a startup check that the existing collection's dimension
-  matches the configured model.
-- `score` exposed by the API is cosine similarity, not raw distance. Convert once in
-  `retrieval/retriever.py`; never let the UI compare mixed metrics.
+- The distance space is fixed when the collection is created. Changing
+  `EMBEDDING_MODEL_NAME` changes vector dimensions; use a new
+  `CHROMA_COLLECTION_NAME` or re-ingest into a fresh directory.
+- If a similarity score is added later, convert distance once in
+  `retrieval/retriever.py` and document the metric; do not let the UI compare
+  mixed metrics.
 - Disable Chroma telemetry (`Settings(anonymized_telemetry=False)`) for a local app.
 
 ---
 
 ## ADR-4 — Content-hash document IDs and deterministic chunk IDs
 
-**Decision:** `doc_id = sha256(file bytes or text content)[:12]`; chunk IDs are
-`f"{doc_id}:{chunk_index}"`.
+**Decision:** `doc_id = sha256(file bytes).hexdigest()` (all 64 characters); chunk
+IDs are `f"{doc_id}_{chunk_index}"`.
 
 **Why:** re-uploading the same file is idempotent (we detect the duplicate and skip),
 and re-ingesting after a bug is safe (upsert instead of duplicate vectors).
@@ -94,9 +95,10 @@ Deterministic IDs also make deletion and test assertions trivial.
 
 **Consequences:**
 - Identical content under two different filenames collapses into one document. That
-  is intentional deduplication; surface it as `DUPLICATE_DOCUMENT`.
+  is intentional content-addressed deduplication; re-uploading replaces the existing
+  chunks instead of adding duplicates.
 - Chunk IDs are stable only while `CHUNK_SIZE`/`CHUNK_OVERLAP` are unchanged. Changing
-  them changes chunk boundaries; re-ingest from scratch (delete by `doc_id` first).
+  them changes chunk boundaries; re-ingest the document.
 - Metadata must carry `doc_id` so subset filtering (`where={"doc_id": {"$in": [...]}}`)
   and document deletion work.
 
@@ -104,8 +106,8 @@ Deterministic IDs also make deletion and test assertions trivial.
 
 ## ADR-5 — Metadata flows through every pipeline stage
 
-**Decision:** every `Document` carries `doc_id`, `filename`, `source_type`, `page`
-(or `null`), `chunk_index`, and `created_at`.
+**Decision:** every chunk carries `doc_id`, `filename`, `chunk_index`, and the
+loader metadata (`page`, `page_label`, `total_pages`, etc. when available).
 
 **Why:** without metadata, citations are impossible and selective retrieval cannot
 be implemented. LangChain loaders preserve page numbers only if we do not discard
@@ -113,14 +115,15 @@ them while splitting.
 
 **Consequences:** the splitter must copy document metadata to every child chunk and
 append `chunk_index`; the retriever must keep metadata when returning `Document`s;
-the API maps metadata to `sources[]`. Tests should assert page numbers survive.
+the API maps metadata to `retrieved_chunks[].metadata`. Tests should assert page
+numbers survive.
 
 ---
 
 ## ADR-6 — Chroma `PersistentClient`, single worker in development
 
-**Decision:** use local persistent Chroma at `CHROMA_PERSIST_DIR`; run uvicorn with
-one worker (`--workers 1`) during development.
+**Decision:** use local persistent Chroma at `CHROMA_PERSIST_DIRECTORY`; run uvicorn
+with one worker (`--workers 1`) during development.
 
 **Why:** Chroma's local mode is SQLite-backed. Multiple processes writing the same
 directory can produce lock errors or corruption. One process is plenty for a
@@ -133,32 +136,34 @@ the database is disposable, delete `chroma_db/` and re-ingest.
 
 ---
 
-## ADR-7 — Initialize expensive services once in FastAPI lifespan
+## ADR-7 — Lazy, process-local caches for expensive services
 
-**Decision:** load settings, embedding model, vector store, and LLM in an `lifespan`
-handler and store them on `app.state` (or inject via dependencies).
+**Decision:** cache the embedding model, Chroma wrapper, and LLM with `lru_cache`
+factories instead of building them per request. The `lifespan` handler logs startup
+configuration and warns when `GROQ_API_KEY` is missing; it does not load models.
 
 **Why:** `HuggingFaceEmbeddings` loads the model into memory and Chroma opens a
-SQLite file. Doing that per request would be slow and leak resources.
+SQLite file. Doing that per request would be slow and leak resources, while loading
+them at import time makes health checks and tests unnecessarily heavy.
 
-**Consequences:** tests override dependencies with fakes; shutdown closes the Chroma
-client. Startup must fail loudly (with a clear log line) if the Groq key is missing
-or the embedding model cannot load.
+**Consequences:** the first upload/chat pays the model-load cost; `/api/health`
+stays cheap because it reads Chroma without embeddings. Tests clear the caches
+between cases and monkeypatch the factories with fakes.
 
 ---
 
 ## ADR-8 — Same-origin static frontend, no CORS by default
 
 **Decision:** FastAPI serves `frontend/` with `StaticFiles(..., html=True)` mounted
-at `/` as the last route.
+at `/app` as the last route. The root `/` returns a small JSON service banner.
 
 **Why:** no CORS configuration, no duplicate servers, and relative asset paths just
-work. API routes are under `/api`, so mounting `/` last cannot shadow them.
+work. Keeping the UI under `/app` leaves `/` and `/api` unambiguous.
 
 **Consequences:** mount order matters — Starlette matches in declaration order. For
-frontend development, `python -m http.server` on another port is used with the mock
-adapter, so no backend request is made; M6 integration either uses same-origin or
-explicitly allow-lists `http://127.0.0.1:5500`.
+frontend development without a backend, `python -m http.server` on another port is
+used with `?mock=1`; otherwise the UI calls the same origin or an explicit
+`?apiBase` origin allow-listed in `CORS_ALLOW_ORIGINS`.
 
 ---
 
@@ -179,15 +184,15 @@ server-side, return a sanitized message. `Retry-After` is preserved for 429.
 
 ## ADR-10 — Mock-first frontend against a frozen contract
 
-**Decision:** build the UI before the backend, with `frontend/js/mock.js` implementing
-the same API surface and `frontend/js/config.js` toggling `useMock`.
+**Decision:** ship `frontend/js/mock.js` implementing the same method surface as the
+real client, but default the UI to the real API. The mock is opt-in with `?mock=1`.
 
-**Why:** the UI/UX and the contract can be validated early; backend milestones can be
-tested against a known target instead of discovering shape mismatches at the end.
+**Why:** the mock remains useful for UI work without a backend, while the default
+experience exercises the actual RAG pipeline and catches contract drift early.
 
 **Consequences:** any contract change must update `docs/API_CONTRACT.md`, the mock, and
-the real client together. M6 flips `useMock: false` and fixes drift. Mock-only seeds
-and error triggers must be documented, not hidden.
+the real client together. Mock-only seeds and error triggers must be documented, not
+hidden.
 
 ---
 
