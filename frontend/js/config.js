@@ -1,26 +1,30 @@
 /**
  * Frontend configuration.
  *
- * `useMock` defaults to true so the UI works before the backend exists (M1).
- * Flip it to false in M6, or append `?mock=0` to the URL while developing.
+ * The UI talks to the real FastAPI backend by default. To preview it without a
+ * running backend, append `?mock=1` to the URL.
  * Do NOT put API keys here — the browser must never see them.
  */
 
 const params = new URLSearchParams(window.location.search);
 const mockParam = params.get("mock");
 
-const mockDisabled = mockParam !== null && ["0", "false", "off"].includes(mockParam.toLowerCase());
+const mockEnabled =
+  mockParam !== null && ["1", "true", "on", "yes"].includes(mockParam.toLowerCase());
 
 export const CONFIG = {
   apiBase: params.get("apiBase") || "",
-  useMock: !mockDisabled,
+  useMock: mockEnabled,
   requestTimeoutMs: 120_000,
   healthTimeoutMs: 8_000,
   uploadTimeoutMs: 300_000,
-  maxFileMb: 20,
+  maxFileMb: 10,
   maxFilesPerUpload: 10,
-  maxQuestionChars: 2000,
+  maxQuestionChars: 4000,
   maxTextChars: 100_000,
+  maxTitleChars: 120,
   mockLatencyMs: 600,
-  allowedExtensions: [".pdf", ".txt", ".md", ".docx"],
+  allowedExtensions: [".pdf", ".txt", ".docx"],
+  defaultTopK: 3,
+  topKOptions: [1, 2, 3, 4, 5, 6, 8, 10],
 };

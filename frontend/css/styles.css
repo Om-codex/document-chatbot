@@ -1015,6 +1015,31 @@ button:disabled {
   flex: 0 0 auto;
 }
 
+.select-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.select-field select {
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.select-field select:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
 .composer-note {
   margin-top: 8px;
   color: var(--muted);

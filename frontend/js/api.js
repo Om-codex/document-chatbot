@@ -1,5 +1,5 @@
 /**
- * Real HTTP client for the FastAPI backend described in docs/API_CONTRACT.md.
+ * Real HTTP client for the FastAPI backend.
  * All functions return plain promises and throw `ApiError` for every failure,
  * so the UI never has to deal with raw fetch/XHR semantics.
  */
@@ -21,7 +21,7 @@ export class ApiError extends Error {
 }
 
 const NETWORK_MESSAGE =
-  "Cannot reach the API. Is the FastAPI server running? (Set useMock: true in js/config.js to preview without it.)";
+  "Cannot reach the API. Is the FastAPI server running? (Append ?mock=1 to preview without it.)";
 
 function buildApiError(payload, status) {
   const detail = payload && typeof payload === "object" ? payload.detail : null;
@@ -132,7 +132,7 @@ async function request(path, { method = "GET", body, signal, timeoutMs = CONFIG.
  * fetch() cannot report upload progress, so multipart uploads use XHR.
  * The response/error shape is identical to `request()`.
  */
-function upload(path, files, onProgress, timeoutMs = CONFIG.uploadTimeoutMs) {
+function upload(path, file, onProgress, timeoutMs = CONFIG.uploadTimeoutMs) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", CONFIG.apiBase + path);
@@ -165,7 +165,7 @@ function upload(path, files, onProgress, timeoutMs = CONFIG.uploadTimeoutMs) {
     xhr.onabort = () => reject(new ApiError("Upload cancelled.", { code: "ABORTED" }));
 
     const form = new FormData();
-    for (const file of files) form.append("files", file, file.name);
+    form.append("file", file, file.name);
     xhr.send(form);
   });
 }
@@ -177,32 +177,24 @@ export function createRealApi() {
     },
 
     listDocuments() {
-      return request("/api/documents");
+      return request("/api/documents/");
     },
 
-    uploadDocuments(files, onProgress) {
-      return upload("/api/documents/upload", files, onProgress);
-    },
-
-    addTextDocument(title, content) {
-      return request("/api/documents/text", {
-        method: "POST",
-        body: { title, content },
-        timeoutMs: CONFIG.uploadTimeoutMs,
-      });
+    uploadDocument(file, onProgress) {
+      return upload("/api/documents/upload", file, onProgress);
     },
 
     deleteDocument(docId) {
       return request(`/api/documents/${encodeURIComponent(docId)}`, { method: "DELETE" });
     },
 
-    chat({ question, documentIds = null, topK = null, signal }) {
-      return request("/api/chat", {
+    chat({ question, documentIds = null, topK = CONFIG.defaultTopK, signal }) {
+      return request("/api/chat/", {
         method: "POST",
         body: {
           question,
-          document_ids: documentIds,
-          ...(topK ? { top_k: topK } : {}),
+          doc_ids: documentIds,
+          k: topK,
         },
         signal,
         timeoutMs: CONFIG.requestTimeoutMs,

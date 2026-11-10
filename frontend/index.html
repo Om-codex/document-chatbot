@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Ask grounded questions about your PDF, TXT, Markdown and DOCX documents." />
+  <meta name="description" content="Ask grounded questions about your PDF, TXT and DOCX documents." />
   <title>Document Chatbot</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/styles.css" />
@@ -28,7 +28,7 @@
         <section class="panel panel--upload">
           <div class="panel-heading">
             <h2>Add documents</h2>
-            <span class="muted small">PDF · TXT · MD · DOCX</span>
+            <span class="muted small">PDF · TXT · DOCX</span>
           </div>
 
           <div id="dropzone" class="dropzone" role="button" tabindex="0"
@@ -40,10 +40,10 @@
               <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
             </svg>
             <p><strong>Drop files here</strong> or <span class="link-text">browse</span></p>
-            <p class="muted small">Up to 20 MB each · 10 files at a time</p>
+            <p class="muted small">Up to 10 MB each · 10 files at a time</p>
           </div>
           <input id="file-input" type="file" multiple hidden
-                 accept=".pdf,.txt,.md,.docx,application/pdf,text/plain,text/markdown" />
+                 accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
 
           <div class="upload-actions">
             <button id="upload-btn" class="btn btn--secondary" type="button">Choose files</button>
@@ -104,12 +104,25 @@
         <section class="composer">
           <form id="chat-form" class="composer-form" autocomplete="off">
             <label class="sr-only" for="question">Your question</label>
-            <textarea id="question" rows="1" maxlength="2000"
+            <textarea id="question" rows="1" maxlength="4000"
                       placeholder="Ask a question about your documents…"></textarea>
             <div class="composer-bar">
               <span id="composer-hint" class="composer-hint muted small">Loading…</span>
               <div class="composer-meta">
-                <span id="question-count" class="muted small">0 / 2000</span>
+                <label class="select-field" for="top-k">
+                  <span class="muted small">Sources</span>
+                  <select id="top-k" aria-label="Number of source chunks to retrieve">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="8">8</option>
+                    <option value="10">10</option>
+                  </select>
+                </label>
+                <span id="question-count" class="muted small">0 / 4000</span>
                 <button id="send-btn" class="btn btn--primary" type="submit" disabled>Send</button>
               </div>
             </div>

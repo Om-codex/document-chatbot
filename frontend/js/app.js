@@ -40,6 +40,7 @@ const dom = {
   questionCount: document.getElementById("question-count"),
   sendBtn: document.getElementById("send-btn"),
   composerHint: document.getElementById("composer-hint"),
+  topK: document.getElementById("top-k"),
   clearChat: document.getElementById("clear-chat"),
 
   banner: document.getElementById("banner"),
@@ -70,6 +71,7 @@ const state = {
   chatController: null,
   loaded: false,
   health: null,
+  topK: CONFIG.defaultTopK,
 };
 
 let progressHideTimer = null;
@@ -84,16 +86,6 @@ function el(tag, className, text) {
   return node;
 }
 
-function formatBytes(bytes) {
-  const value = Number(bytes);
-  if (!Number.isFinite(value) || value <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-  const scaled = value / 1024 ** index;
-  const rounded = scaled >= 10 || index === 0 ? Math.round(scaled) : scaled.toFixed(1);
-  return `${rounded} ${units[index]}`;
-}
-
 function extensionOf(filename) {
   const dot = String(filename).lastIndexOf(".");
   return dot >= 0 ? String(filename).slice(dot).toLowerCase() : "";
@@ -101,6 +93,14 @@ function extensionOf(filename) {
 
 function plural(count, singular, pluralForm) {
   return count === 1 ? singular : pluralForm || `${singular}s`;
+}
+
+function safeFilename(title) {
+  const cleaned = String(title)
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/[. ]+$/g, "")
+    .trim();
+  return cleaned || "pasted-text";
 }
 
 function errorText(error) {
@@ -112,14 +112,12 @@ function errorText(error) {
 }
 
 function typeLabel(sourceType) {
-  return { pdf: "PDF", txt: "TXT", markdown: "MD", docx: "DOCX", text: "TEXT" }[sourceType] || "FILE";
+  return { pdf: "PDF", txt: "TXT", docx: "DOCX", text: "TEXT" }[sourceType] || "FILE";
 }
 
-function scoreText(score) {
-  const value = Number(score);
-  if (!Number.isFinite(value)) return "";
-  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
-  return `${pct}% match`;
+function documentType(doc) {
+  const ext = extensionOf(doc && doc.filename ? doc.filename : "");
+  return { ".pdf": "pdf", ".txt": "txt", ".docx": "docx" }[ext] || "text";
 }
 
 function scrollToBottom() {
@@ -140,7 +138,7 @@ function renderMode() {
   if (CONFIG.useMock) {
     dom.healthPill.className = "pill pill--mock";
     dom.healthPill.textContent = "Mock mode";
-    dom.healthPill.title = "The UI is running against the mock adapter. Set useMock: false in js/config.js to use the real API.";
+    dom.healthPill.title = "The UI is running against the mock adapter. Remove ?mock=1 from the URL to use the real API.";
   } else {
     dom.healthPill.className = "pill pill--pending";
     dom.healthPill.textContent = "Connecting…";
@@ -151,8 +149,13 @@ function renderMode() {
 function renderHealth() {
   if (!state.health) return;
   const isMock = CONFIG.useMock;
-  dom.healthPill.className = isMock ? "pill pill--mock" : "pill pill--ok";
-  dom.healthPill.textContent = isMock ? "Mock mode" : "Connected";
+  const degraded = !isMock && state.health.status && state.health.status !== "ok";
+  dom.healthPill.className = isMock
+    ? "pill pill--mock"
+    : degraded
+      ? "pill pill--error"
+      : "pill pill--ok";
+  dom.healthPill.textContent = isMock ? "Mock mode" : degraded ? "Degraded" : "Connected";
   dom.healthPill.title =
     `LLM: ${state.health.llm_model}\nEmbeddings: ${state.health.embedding_model}` +
     `\nCollection: ${state.health.collection}\nDocuments: ${state.health.document_count}`;
@@ -269,7 +272,7 @@ function renderLibrary() {
     const empty = el("p", "empty-note");
     empty.append(
       el("strong", null, "No documents yet"),
-      document.createTextNode("Upload a PDF, TXT, MD or DOCX file, or paste text to begin.")
+      document.createTextNode("Upload a PDF, TXT or DOCX file, or paste text to begin.")
     );
     dom.docList.append(empty);
     if (state.messages.length === 0) renderEmptyChat({ replace: true });
@@ -295,15 +298,16 @@ function renderLibrary() {
     const titleRow = el("div", "doc-title-row");
     const name = el("span", "doc-name", doc.filename);
     name.title = doc.filename;
-    const safeType = ["pdf", "txt", "markdown", "docx", "text"].includes(doc.source_type)
-      ? doc.source_type
-      : "text";
-    const badge = el("span", `type-badge type-badge--${safeType}`, typeLabel(doc.source_type));
+    const safeType = documentType(doc);
+    const badge = el("span", `type-badge type-badge--${safeType}`, typeLabel(safeType));
     titleRow.append(name, badge);
 
-    const metaParts = [`${doc.chunk_count} ${plural(doc.chunk_count, "chunk")}`];
-    if (doc.page_count) metaParts.push(`${doc.page_count} ${plural(doc.page_count, "page")}`);
-    metaParts.push(formatBytes(doc.size_bytes));
+    const chunkCount = Number(doc.total_chunks) || 0;
+    const pageCount = Number(doc.total_pages);
+    const metaParts = [`${chunkCount} ${plural(chunkCount, "chunk")}`];
+    if (Number.isFinite(pageCount) && pageCount > 0) {
+      metaParts.push(`${pageCount} ${plural(pageCount, "page")}`);
+    }
     const meta = el("p", "doc-meta", metaParts.join(" · "));
 
     main.append(titleRow, meta);
@@ -477,26 +481,49 @@ function hideProgress(delay = 0) {
   }, delay);
 }
 
-async function uploadFiles(files) {
+async function uploadFiles(files, initialProblems = []) {
   state.uploading = true;
   setBanner(null);
   renderFeedback([]);
-
-  const fileLabel = `${files.length} ${plural(files.length, "file")}`;
-  showProgress(0, `Uploading ${fileLabel}…`);
   dom.uploadBtn.disabled = true;
   updateComposer();
 
-  try {
-    const result = await api.uploadDocuments(files, (percent) => {
-      showProgress(
-        percent,
-        percent >= 100 ? "Upload complete · indexing chunks…" : `Uploading ${fileLabel}…`
-      );
-    });
+  // The backend accepts one file per request, so upload sequentially. This also
+  // keeps progress meaningful and isolates one bad file from the rest.
+  const total = files.length;
+  const added = [];
+  const errors = [...initialProblems];
 
-    const added = Array.isArray(result && result.documents) ? result.documents : [];
-    const errors = Array.isArray(result && result.errors) ? result.errors : [];
+  try {
+    for (let index = 0; index < total; index += 1) {
+      const file = files[index];
+      const label =
+        total === 1
+          ? `Uploading “${file.name}”…`
+          : `Uploading ${index + 1} of ${total}: “${file.name}”…`;
+
+      showProgress(Math.round((index / total) * 100), label);
+
+      try {
+        const result = await api.uploadDocument(file, (percent) => {
+          const overall = Math.round(((index + percent / 100) / total) * 100);
+          showProgress(
+            overall,
+            percent >= 100 ? `Indexing “${file.name}”…` : label
+          );
+        });
+
+        if (result && result.doc_id) added.push(result);
+      } catch (error) {
+        errors.push({
+          filename: file.name,
+          code: error instanceof ApiError ? error.code : "UPLOAD_FAILED",
+          message: errorText(error),
+        });
+      }
+    }
+
+    showProgress(100, "Upload complete");
 
     if (state.scope === "selected") {
       for (const doc of added) state.selected.add(doc.doc_id);
@@ -518,9 +545,6 @@ async function uploadFiles(files) {
     } else if (errors.length === 0) {
       setBanner("Upload finished, but the server returned no documents.");
     }
-  } catch (error) {
-    setBanner(errorText(error));
-    hideProgress(0);
   } finally {
     state.uploading = false;
     dom.uploadBtn.disabled = false;
@@ -567,9 +591,12 @@ async function handleFiles(fileList) {
     }
   }
 
-  renderFeedback(problems);
-  if (accepted.length === 0) return;
-  await uploadFiles(accepted);
+  if (accepted.length === 0) {
+    renderFeedback(problems);
+    return;
+  }
+
+  await uploadFiles(accepted, problems);
 }
 
 /* --------------------------------------------------------------- paste text */
@@ -605,13 +632,16 @@ async function submitText(event) {
   dom.textError.hidden = true;
 
   try {
-    const result = await api.addTextDocument(title, content.trim());
-    const doc = result && result.document;
+    // The backend only accepts files, so paste-text is uploaded as a .txt file.
+    const base = safeFilename(title);
+    const filename = base.toLowerCase().endsWith(".txt") ? base : `${base}.txt`;
+    const file = new File([content.trim()], filename, { type: "text/plain" });
+    const result = await api.uploadDocument(file, null);
 
     dom.textDialog.close();
     showToast(`“${title}” added to the library`);
 
-    await refreshDocuments({ addIds: doc ? [doc.doc_id] : [], silent: true });
+    await refreshDocuments({ addIds: result && result.doc_id ? [result.doc_id] : [], silent: true });
 
     if (state.scope === "selected" && state.selected.size === state.documents.length) {
       state.scope = "all";
@@ -657,7 +687,7 @@ function renderEmptyChat({ replace = false } = {}) {
       null,
       hasDocs
         ? "Answers are grounded in the documents currently selected in the library."
-        : "Upload a PDF, TXT, MD or DOCX file, or paste text. Then ask a question about it."
+        : "Upload a PDF, TXT or DOCX file, or paste text. Then ask a question about it."
     )
   );
 
@@ -680,6 +710,24 @@ function renderEmptyChat({ replace = false } = {}) {
   dom.chatLog.append(wrapper);
 }
 
+function normalizeSources(chunks) {
+  if (!Array.isArray(chunks)) return [];
+
+  return chunks.map((chunk) => {
+    const metadata = (chunk && chunk.metadata) || {};
+    const pageNumber =
+      metadata.page_number ??
+      (Number.isInteger(metadata.page) ? metadata.page + 1 : null);
+
+    return {
+      filename: metadata.filename || "Unknown",
+      page: pageNumber,
+      chunk_index: metadata.chunk_index,
+      snippet: chunk && chunk.content ? chunk.content : "",
+    };
+  });
+}
+
 function buildSources(sources) {
   const details = el("details", "sources");
   details.append(el("summary", null, `${sources.length} ${plural(sources.length, "source")}`));
@@ -689,10 +737,7 @@ function buildSources(sources) {
   for (const source of sources) {
     const item = el("li", "source");
     const top = el("div", "source-top");
-    top.append(
-      el("span", "source-file", source.filename || "Untitled"),
-      el("span", "source-score", scoreText(source.score))
-    );
+    top.append(el("span", "source-file", source.filename || "Untitled"));
 
     const metaParts = [];
     if (source.page !== null && source.page !== undefined) metaParts.push(`Page ${source.page}`);
@@ -870,13 +915,17 @@ async function requestAnswer(question) {
 
   try {
     const documentIds = state.scope === "all" ? null : Array.from(state.selected);
-    const result = await api.chat({ question, documentIds, signal: controller.signal });
+    const result = await api.chat({
+      question,
+      documentIds,
+      topK: state.topK,
+      signal: controller.signal,
+    });
 
     const finalMessage = {
       role: "assistant",
       content: (result && result.answer) || "The model returned an empty answer.",
-      sources: Array.isArray(result && result.sources) ? result.sources : [],
-      model: result && result.model ? result.model : null,
+      sources: normalizeSources(result && result.retrieved_chunks),
     };
 
     replaceMessage(pending, finalMessage);
@@ -974,6 +1023,12 @@ function bindEvents() {
 
   dom.selectAll.addEventListener("change", () => setSelectAll(dom.selectAll.checked));
 
+  dom.topK.addEventListener("change", () => {
+    const value = Number(dom.topK.value);
+    state.topK = Number.isFinite(value) ? value : CONFIG.defaultTopK;
+    updateComposer();
+  });
+
   dom.question.addEventListener("input", () => {
     autoGrow();
     updateComposer();
@@ -1030,6 +1085,7 @@ function autoGrow() {
 
 async function init() {
   renderMode();
+  dom.topK.value = String(state.topK);
   bindEvents();
   renderEmptyChat({ replace: true });
   updateScopeUI();
