@@ -107,6 +107,10 @@ the browser via `localStorage`.
 
 The header toggle switches between light and dark themes. It follows the OS
 preference on first visit, then remembers the user's choice in `localStorage`.
+The toggle is self-contained in `index.html`, so it does not depend on the app
+module loading. If it appears unresponsive after an update, hard-refresh the page
+(`Ctrl+Shift+R`) to drop cached CSS/JS, and make sure you are using the `/app/`
+URL rather than opening `frontend/index.html` directly.
 
 Run **one** Uvicorn worker in local development. Chroma's persistent mode is
 SQLite-backed and multiple writers can lock or corrupt the same directory.

@@ -16,7 +16,6 @@ const api = CONFIG.useMock ? createMockApi() : createRealApi();
 
 const dom = {
   healthPill: document.getElementById("health-pill"),
-  themeToggle: document.getElementById("theme-toggle"),
 
   dropzone: document.getElementById("dropzone"),
   fileInput: document.getElementById("file-input"),
@@ -146,43 +145,6 @@ function applyTopKFromInput({ commit = false } = {}) {
   }
 
   updateComposer();
-}
-
-function currentTheme() {
-  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-}
-
-function storedTheme() {
-  try {
-    const value = window.localStorage.getItem(CONFIG.themeStorageKey);
-    return value === "light" || value === "dark" ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function applyTheme(theme, { persist = true } = {}) {
-  const next = theme === "dark" ? "dark" : "light";
-  document.documentElement.dataset.theme = next;
-
-  if (persist) {
-    try {
-      window.localStorage.setItem(CONFIG.themeStorageKey, next);
-    } catch {
-      // Storage can be unavailable; the theme still applies for this session.
-    }
-  }
-
-  const dark = next === "dark";
-  dom.themeToggle.setAttribute("aria-pressed", String(dark));
-  dom.themeToggle.setAttribute(
-    "title",
-    dark ? "Switch to light mode" : "Switch to dark mode"
-  );
-}
-
-function toggleTheme() {
-  applyTheme(currentTheme() === "dark" ? "light" : "dark");
 }
 
 function errorText(error) {
@@ -1103,17 +1065,6 @@ function bindEvents() {
   document.addEventListener("dragover", (event) => event.preventDefault());
   document.addEventListener("drop", (event) => event.preventDefault());
 
-  dom.themeToggle.addEventListener("click", toggleTheme);
-
-  const themeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  if (themeQuery.addEventListener) {
-    themeQuery.addEventListener("change", (event) => {
-      if (storedTheme() === null) {
-        applyTheme(event.matches ? "dark" : "light", { persist: false });
-      }
-    });
-  }
-
   dom.selectAll.addEventListener("change", () => setSelectAll(dom.selectAll.checked));
 
   dom.topK.addEventListener("input", () => applyTopKFromInput());
@@ -1176,7 +1127,6 @@ function autoGrow() {
 
 async function init() {
   renderMode();
-  applyTheme(currentTheme(), { persist: false });
   dom.topK.value = String(state.topK);
   bindEvents();
   renderEmptyChat({ replace: true });

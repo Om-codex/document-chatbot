@@ -6,18 +6,74 @@
   <meta name="description" content="Ask grounded questions about your PDF, TXT and DOCX documents." />
   <title>Document Chatbot</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css?v=2" />
   <script>
-    // Apply the saved theme before first paint to avoid a flash of the wrong theme.
+    // Self-contained theme controller: applies the saved theme before first paint
+    // and binds the toggle via event delegation, so it works even if app.js fails
+    // to load (for example when the page is opened directly from disk).
     (function () {
-      try {
-        var stored = localStorage.getItem("document-chatbot.theme");
-        var theme = stored === "light" || stored === "dark"
-          ? stored
-          : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-        document.documentElement.dataset.theme = theme;
-      } catch (error) {
-        document.documentElement.dataset.theme = "light";
+      var STORAGE_KEY = "document-chatbot.theme";
+      var root = document.documentElement;
+
+      function readStored() {
+        try {
+          var value = localStorage.getItem(STORAGE_KEY);
+          return value === "light" || value === "dark" ? value : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function preferred() {
+        return window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+
+      function syncButton(theme) {
+        var button = document.getElementById("theme-toggle");
+        if (!button) return;
+        var dark = theme === "dark";
+        button.setAttribute("aria-pressed", String(dark));
+        button.setAttribute("title", dark ? "Switch to light mode" : "Switch to dark mode");
+      }
+
+      function applyTheme(theme, persist) {
+        var next = theme === "dark" ? "dark" : "light";
+        root.dataset.theme = next;
+        if (persist) {
+          try {
+            localStorage.setItem(STORAGE_KEY, next);
+          } catch (error) {
+            // Storage can be unavailable; the theme still applies for this session.
+          }
+        }
+        syncButton(next);
+      }
+
+      applyTheme(readStored() || preferred(), false);
+
+      document.addEventListener("click", function (event) {
+        var target = event.target;
+        var button = target && target.closest ? target.closest("#theme-toggle") : null;
+        if (!button) return;
+        applyTheme(root.dataset.theme === "dark" ? "light" : "dark", true);
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        syncButton(root.dataset.theme);
+      });
+
+      if (window.matchMedia) {
+        var query = window.matchMedia("(prefers-color-scheme: dark)");
+        if (query.addEventListener) {
+          query.addEventListener("change", function (event) {
+            if (readStored() === null) {
+              applyTheme(event.matches ? "dark" : "light", false);
+            }
+          });
+        }
       }
     })();
   </script>
@@ -196,6 +252,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <div id="sr-announcer" class="sr-only" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>
