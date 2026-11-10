@@ -54,13 +54,27 @@ document-chatbot/
 │   └── exceptions.py          # provider error translation
 ├── utils/                     # logging, validation, file signatures, helpers
 ├── frontend/
-│   ├── index.html
-│   ├── css/styles.css
+│   ├── index.html             # landing page (site entry)
+│   ├── chat.html              # chatbot UI
+│   ├── tour.html              # tour chooser + accessible tour dialog
+│   ├── about.html             # motivation, architecture, decisions, limits
+│   ├── css/
+│   │   ├── styles.css         # chatbot UI styles
+│   │   └── site.css           # landing, tours and About styles
 │   └── js/
 │       ├── config.js          # real/mock switch + limits
 │       ├── api.js             # HTTP client (fetch + XHR upload)
 │       ├── mock.js            # optional demo adapter
-│       └── app.js             # UI controller
+│       ├── app.js             # chatbot UI controller
+│       ├── theme.js           # shared theme controller for site pages
+│       ├── site.js            # nav, scroll state and reveal behaviour
+│       ├── tour-engine.js     # reusable accessible tour dialog
+│       ├── tour-visuals.js    # CSS/HTML diagrams and app mockups
+│       ├── tour-page.js       # tour chooser controller
+│       ├── about.js           # interactive architecture diagram
+│       └── tours/
+│           ├── rag-tour.js    # 12-step engine tour content
+│           └── app-tour.js    # 8-step app tour content
 ├── tests/
 │   ├── conftest.py            # temp storage, fake embeddings, fake LLM
 │   ├── test_documents_api.py
@@ -97,7 +111,10 @@ directly.
 .\.venv\Scripts\python.exe -m uvicorn app:app --reload --port 8000
 ```
 
-- UI: <http://127.0.0.1:8000/app/>
+- Site: <http://127.0.0.1:8000/app/>
+- Chatbot: <http://127.0.0.1:8000/app/chat.html>
+- Tours: <http://127.0.0.1:8000/app/tour.html> (`?tour=rag` or `?tour=app` opens one directly)
+- About: <http://127.0.0.1:8000/app/about.html>
 - API docs: <http://127.0.0.1:8000/docs>
 - Root: <http://127.0.0.1:8000/> (JSON service banner)
 
@@ -107,13 +124,29 @@ the browser via `localStorage`.
 
 The header toggle switches between light and dark themes. It follows the OS
 preference on first visit, then remembers the user's choice in `localStorage`.
-The toggle is self-contained in `index.html`, so it does not depend on the app
-module loading. If it appears unresponsive after an update, hard-refresh the page
-(`Ctrl+Shift+R`) to drop cached CSS/JS, and make sure you are using the `/app/`
-URL rather than opening `frontend/index.html` directly.
+The chatbot's toggle is self-contained in `chat.html`; the landing, tour and About
+pages use `js/theme.js`, which applies the saved theme before first paint. Both
+share the same storage key. If a control appears unresponsive after an update,
+hard-refresh the page (`Ctrl+Shift+R`) to drop cached CSS/JS, and make sure you are
+using the `/app/` URL rather than opening a `frontend/*.html` file directly.
 
 Run **one** Uvicorn worker in local development. Chroma's persistent mode is
 SQLite-backed and multiple writers can lock or corrupt the same directory.
+
+## Site pages and tours
+
+- `frontend/index.html` introduces the project and links into the chatbot.
+- `frontend/tour.html` offers two optional tours. The engine tour has 12 steps
+  across ingestion, retrieval and generation, including the real system prompt
+  from `chains/prompt_template.py`. The app tour has 8 steps based on the actual
+  UI controls in `chat.html` and behaviour in `js/app.js`.
+- Tour progress is stored per tour under `document-chatbot.tour.rag` and
+  `document-chatbot.tour.app` (`in-progress`, `completed` or `skipped`). Tours
+  never open without a button press or an explicit `?tour=` link, and can be
+  replayed from the tour page, the site navigation or the About page.
+- Tour content lives in `js/tours/`; the dialog, keyboard handling and focus
+  management live in `js/tour-engine.js`. Diagrams and app mockups are HTML/CSS,
+  not screenshots.
 
 ### Frontend-only preview (no backend)
 
@@ -121,9 +154,11 @@ SQLite-backed and multiple writers can lock or corrupt the same directory.
 python -m http.server 5500 --directory frontend
 ```
 
-Open <http://127.0.0.1:5500/?mock=1>. Without `?mock=1` the UI calls the real API
-at the same origin. When the UI is served from another origin, pass
-`?apiBase=http://127.0.0.1:8000` and allow that origin in `CORS_ALLOW_ORIGINS`.
+Open <http://127.0.0.1:5500/chat.html?mock=1>. The landing, tour and About pages
+are static and do not call the API, so they work without a server. Without
+`?mock=1` the chatbot calls the real API at the same origin. When the UI is served
+from another origin, pass `?apiBase=http://127.0.0.1:8000` and allow that origin in
+`CORS_ALLOW_ORIGINS`.
 
 Mock triggers: a filename containing `fail` fails that upload; a question
 containing `rate limit` returns a 429; deleting every document leaves chat with a
@@ -247,6 +282,8 @@ from pytest collection. See [`tests/manual/README.md`](tests/manual/README.md).
   embeddings run.
 - Deleting a document scans upload directories by content hash; that is O(files)
   and fine for a local library but not for huge stores.
+- Retrieval is similarity search only: no hybrid keyword search and no reranking.
+- Scanned/image-only PDFs need OCR, which is not implemented.
 - The frontend is intentionally framework-free and has no bundler.
 
 ## Next steps

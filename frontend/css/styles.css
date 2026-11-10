@@ -225,6 +225,36 @@ button:disabled {
   box-shadow: var(--focus);
 }
 
+.site-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.site-back:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.site-back:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
 .theme-icon {
   width: 17px;
   height: 17px;
@@ -1380,6 +1410,15 @@ button:disabled {
   }
 
   .github-link span {
+    display: none;
+  }
+
+  .site-back {
+    width: 32px;
+    padding: 0;
+  }
+
+  .site-back span:last-child {
     display: none;
   }
 

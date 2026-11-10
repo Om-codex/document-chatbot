@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="About the Document Chatbot: motivation, architecture, backend module responsibilities, engineering decisions, limitations and credits." />
+  <title>About — Document Chatbot</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/site.css?v=1" />
+  <script src="js/theme.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" id="site-header">
+    <div class="container site-header__inner">
+      <a class="site-brand" href="index.html" aria-label="Document Chatbot home">
+        <span class="site-brand__mark" aria-hidden="true">DC</span>
+        <span class="site-brand__text">
+          <strong>Document Chatbot</strong>
+          <span>Grounded RAG answers</span>
+        </span>
+      </a>
+
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="index.html">Home</a>
+        <a href="tour.html?tour=rag">Explore RAG</a>
+        <a href="tour.html?tour=app">How to Use</a>
+        <a href="about.html" aria-current="page">About</a>
+        <a class="btn btn--primary btn--sm" href="chat.html">
+          Open App
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </a>
+      </nav>
+
+      <div class="site-tools">
+        <button id="theme-toggle" class="icon-btn" type="button" aria-label="Dark mode" aria-pressed="false" title="Switch to dark mode">
+          <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+          </svg>
+          <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+          </svg>
+        </button>
+        <a class="github-link" href="https://github.com/Om-codex" target="_blank" rel="noopener noreferrer" title="Om-codex on GitHub" aria-label="Om-codex on GitHub">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.73 1.27 3.4.97.1-.75.4-1.27.73-1.56-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z" />
+          </svg>
+          <span>Om-codex</span>
+        </a>
+        <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- =========================================================== A. intro -->
+    <section class="about-hero">
+      <div class="container">
+        <span class="eyebrow">About the project</span>
+        <h1>A document assistant built to be understood, not just used.</h1>
+        <p>
+          This project is a complete retrieval-augmented generation application: a FastAPI
+          backend, a persistent local vector library, a grounded answer chain, and a plain
+          HTML/CSS/JS interface. It is small enough to read end to end, and honest about
+          what it does not do.
+        </p>
+        <div class="about-facts">
+          <span class="about-fact">FastAPI + Uvicorn</span>
+          <span class="about-fact">LangChain 1.x (LCEL)</span>
+          <span class="about-fact">ChromaDB, persistent</span>
+          <span class="about-fact">Groq openai/gpt-oss-20b</span>
+          <span class="about-fact">MiniLM embeddings, local CPU</span>
+          <span class="about-fact">No frontend build step</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================== A. motivation -->
+    <section class="section" id="motivation">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Motivation</span>
+          <h2>Why build another document chatbot?</h2>
+        </div>
+
+        <div class="prose" data-reveal>
+          <p>
+            Most chatbot demos end at a prompt. The genuinely interesting engineering is
+            earlier: deciding how a document becomes chunks, how those chunks become
+            vectors, which passages are retrieved for a question, and how the answer
+            proves where it came from. Those choices determine whether the system is
+            useful or merely convincing.
+          </p>
+          <p>
+            This project treats RAG as a pipeline with inspectable stages. Ingestion,
+            retrieval, generation and transport live in separate modules. The frontend is
+            deliberately plain, the configuration is environment-driven, and the tests run
+            against isolated temporary storage with fake models. The goal was a system
+            that can be demonstrated, explained and debugged without hidden services.
+          </p>
+          <p>
+            The design stance is simple: answer from the provided context, show the
+            passages, fail with a readable message, and never present an unverified
+            capability as a feature. Chat generation uses an external API; embeddings and
+            the vector library run locally.
+          </p>
+          <p class="pull-quote">
+            Grounded does not mean guaranteed. The system is designed to make its evidence
+            visible so a reader can check it.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================== B. architecture -->
+    <section class="section section--soft" id="architecture">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Architecture</span>
+          <h2>Two paths, one modular backend</h2>
+          <p>Ingestion writes to the vector library. Question answering reads from it. Select any component to see what it owns.</p>
+        </div>
+
+        <div class="arch-layout" data-reveal>
+          <div class="arch-canvas">
+            <div class="arch-lane">
+              <p class="arch-lane__title"><span>1</span>Client</p>
+              <div class="arch-flow">
+                <button class="arch-node" type="button" data-node="client" aria-pressed="false">Browser UI</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="apiclient" aria-pressed="false">API client</button>
+              </div>
+            </div>
+
+            <div class="arch-lane">
+              <p class="arch-lane__title"><span>2</span>API and services</p>
+              <div class="arch-flow">
+                <button class="arch-node" type="button" data-node="routes" aria-pressed="false">FastAPI routes</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="schemas" aria-pressed="false">Pydantic schemas</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="services" aria-pressed="false">Services</button>
+              </div>
+            </div>
+
+            <div class="arch-lane">
+              <p class="arch-lane__title"><span>3</span>Ingestion path</p>
+              <div class="arch-flow">
+                <button class="arch-node" type="button" data-node="loaders" aria-pressed="false">Loaders</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="splitter" aria-pressed="false">Splitter</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="embeddings" aria-pressed="false">Embeddings</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="chroma" aria-pressed="false">ChromaDB</button>
+              </div>
+            </div>
+
+            <div class="arch-lane">
+              <p class="arch-lane__title"><span>4</span>Question-answering path</p>
+              <div class="arch-flow">
+                <button class="arch-node" type="button" data-node="retriever" aria-pressed="false">Retriever</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="prompt" aria-pressed="false">Prompt</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="llm" aria-pressed="false">Groq LLM</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="response" aria-pressed="false">Cited response</button>
+              </div>
+            </div>
+
+            <div class="arch-lane">
+              <p class="arch-lane__title"><span>5</span>Storage and configuration</p>
+              <div class="arch-flow">
+                <button class="arch-node" type="button" data-node="uploads" aria-pressed="false">data/uploads</button>
+                <button class="arch-node" type="button" data-node="chromadb" aria-pressed="false">data/chroma_db</button>
+                <button class="arch-node" type="button" data-node="settings" aria-pressed="false">config/settings.py</button>
+              </div>
+            </div>
+          </div>
+
+          <aside class="arch-detail" id="arch-detail" aria-live="polite">
+            <p class="arch-detail__kicker">Component</p>
+            <h3>Select a component</h3>
+            <p>Every box in the diagram is a real module or boundary in this project. Choose one to see its responsibility and the file that implements it.</p>
+            <dl>
+              <dt>Tip</dt>
+              <dd>Start with the ingestion path, then follow a question through retrieval and generation.</dd>
+            </dl>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= C. modules -->
+    <section class="section" id="modules">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Module map</span>
+          <h2>Who owns what</h2>
+          <p>The backend is grouped by responsibility rather than by layer alone, so each stage of the pipeline has one obvious home.</p>
+        </div>
+
+        <div class="module-grid">
+          <article class="module-card" data-reveal>
+            <code>app.py</code>
+            <h3>Application entrypoint</h3>
+            <p>Creates the FastAPI app, configures CORS and structured error handlers, logs startup configuration, and mounts the static frontend at <code>/app</code>.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>api/</code>
+            <h3>Transport layer</h3>
+            <p>Routes for chat, documents and health. Pydantic schemas validate requests and shape responses; <code>api/errors.py</code> builds the shared error envelope.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>services/</code>
+            <h3>Application services</h3>
+            <p><code>document_service.py</code> streams and validates uploads, lists the library and deletes documents. <code>chat_service.py</code> validates document selection, builds the retriever and runs the chain.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>ingestion/</code>
+            <h3>Load, split and identify</h3>
+            <p>Format-specific loaders, the recursive character splitter, and the pipeline that computes the content hash and attaches <code>doc_id</code>, <code>filename</code> and <code>chunk_index</code>.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>embeddings/</code>
+            <h3>Local vectors</h3>
+            <p>Loads <code>sentence-transformers/all-MiniLM-L6-v2</code> once per process, on CPU, with normalized embeddings.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>vectorstore/</code>
+            <h3>Persistent storage</h3>
+            <p>Owns the Chroma collection: upserting chunks, pruning stale IDs, listing documents, counting chunks and deleting by <code>doc_id</code>.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>retrieval/</code>
+            <h3>Similarity search</h3>
+            <p>Builds a similarity retriever with a configurable <code>k</code> and an optional <code>doc_id</code> filter for scoped questions.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>chains/</code>
+            <h3>Prompt and answer chain</h3>
+            <p>The real prompt template and the LCEL chain that retrieves, formats context, calls the model, parses text and short-circuits empty retrieval.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>generation/</code>
+            <h3>Model access and errors</h3>
+            <p>Creates the cached Groq client and translates provider failures into typed exceptions the API can map to readable responses.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>config/ + utils/</code>
+            <h3>Configuration and shared helpers</h3>
+            <p>Environment-driven settings, filename sanitisation, document-ID validation, file-signature checks and logging setup.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== D. decisions -->
+    <section class="section section--soft" id="decisions">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Engineering decisions</span>
+          <h2>The trade-offs behind the code</h2>
+          <p>These are the choices that shaped the implementation, with the reasoning that made them worth keeping.</p>
+        </div>
+
+        <div class="decision-list" data-reveal>
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-1</span> Groq for chat, local embeddings</summary>
+            <div class="decision__body">
+              <p>Chat generation uses Groq's <code>openai/gpt-oss-20b</code> at temperature 0. Embeddings use a local sentence-transformers model. This keeps ingestion free of a second API key and per-chunk cost, while keeping generation fast and inexpensive.</p>
+              <p>The consequence is a split dependency: retrieval works locally, but a final answer still requires network access to Groq and is subject to its free-tier limits.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-2</span> LCEL instead of legacy chains</summary>
+            <div class="decision__body">
+              <p>The answer path is composed with LangChain Expression Language: retrieve, format documents, build the prompt, call the model, parse the string. LCEL keeps the data flow explicit and makes the empty-retrieval branch easy to isolate.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-3</span> Normalized embeddings, no exposed score</summary>
+            <div class="decision__body">
+              <p>Vectors are normalized and Chroma uses its default L2 index. The API returns the retrieved passages and metadata, but not a similarity score. Exposing a raw distance without documenting the metric would invite comparisons that do not mean what they appear to mean.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--doc">ADR-4</span> Content-hash IDs and deterministic chunks</summary>
+            <div class="decision__body">
+              <p><code>doc_id</code> is the SHA-256 of the file bytes, and each chunk ID combines that hash with its index. Re-uploading identical content replaces the existing document instead of duplicating it.</p>
+              <p>Replacement upserts the new chunks first and only then prunes IDs that no longer exist, so a failed update does not delete the previous working version first.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--doc">ADR-5</span> Metadata travels through every stage</summary>
+            <div class="decision__body">
+              <p>Every chunk carries <code>doc_id</code>, <code>filename</code> and <code>chunk_index</code>, plus page metadata supplied by the loader. That is what makes document scoping and page-level citations possible without a second index.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-6</span> Persistent Chroma, one worker in development</summary>
+            <div class="decision__body">
+              <p>Chroma runs in persistent local mode under <code>data/chroma_db</code>. The embedding model, vector store and LLM client are cached per process, so local development uses a single Uvicorn worker.</p>
+              <p>Scaling to multiple workers would mean each process loads its own model and opens its own client; that is a deployment concern this local project does not pretend to solve.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-7</span> Skip the LLM when nothing is retrieved</summary>
+            <div class="decision__body">
+              <p>If retrieval returns no chunks, the chain returns a fixed message explaining that no relevant information was found. Calling the model with empty context could only produce an ungrounded answer, and it would make an infrastructure failure harder to distinguish from a genuine miss.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-8</span> One error envelope, readable in the UI</summary>
+            <div class="decision__body">
+              <p>Application errors return a consistent JSON shape with a code and message. Provider failures such as rate limits and timeouts are translated before they reach the browser. The frontend renders these as a dismissible banner, inline feedback or a toast — never a browser alert.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-9</span> Same-origin static frontend</summary>
+            <div class="decision__body">
+              <p>FastAPI serves the frontend from the same process at <code>/app</code>, so there is no separate frontend server and no CORS requirement by default. The UI is plain HTML, CSS and JavaScript with no build step.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--doc">ADR-10</span> Isolated tests with fake models</summary>
+            <div class="decision__body">
+              <p>The normal test suite uses temporary Chroma and upload directories, fake embeddings and a fake chat model. A real-provider test is opt-in through an environment variable. This keeps the suite fast, deterministic and independent of network access.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== E. features -->
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Key features</span>
+          <h2>What the implementation actually provides</h2>
+        </div>
+
+        <ul class="check-list" data-reveal>
+          <li>PDF, TXT and DOCX ingestion, plus a paste-text dialog that uses the same pipeline.</li>
+          <li>Local 384-dimension embeddings with a persistent Chroma vector library.</li>
+          <li>Grounded prompting with an explicit instruction to admit when the context does not contain the answer.</li>
+          <li>Source citations with filename, chunk index and page metadata when available.</li>
+          <li>Document-scoped retrieval and a configurable top-k between 1 and 20.</li>
+          <li>Content-addressed document IDs with safe replacement of re-uploaded files.</li>
+          <li>Readable, structured errors and a live health indicator in the UI.</li>
+          <li>Light and dark themes, keyboard-accessible controls and reduced-motion support.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- =========================================================== F. stack -->
+    <section class="section section--soft" id="stack">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Tech stack</span>
+          <h2>Pinned tools, no hidden services</h2>
+          <p>Chat inference is the only external call. Document processing, embeddings and vector storage run locally.</p>
+        </div>
+
+        <div class="tech-grid">
+          <div class="tech-card" data-reveal><span class="tech-icon">API</span><span><strong>FastAPI 0.162</strong><span>Typed routes, validation, static hosting</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">LC</span><span><strong>LangChain 1.x</strong><span>Loaders, splitter, retriever, LCEL chain</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">CH</span><span><strong>ChromaDB 1.5</strong><span>Persistent local vector collection</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">GQ</span><span><strong>Groq + gpt-oss-20b</strong><span>Chat generation, temperature 0</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">HF</span><span><strong>sentence-transformers</strong><span>all-MiniLM-L6-v2, 384-dim, CPU</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">PY</span><span><strong>pypdf + docx2txt</strong><span>PDF and Word text extraction</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">PD</span><span><strong>Pydantic Settings</strong><span>Environment-driven configuration</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">JS</span><span><strong>Vanilla HTML/CSS/JS</strong><span>No framework, no build step</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== G. limitations -->
+    <section class="section" id="limits">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Limitations and future work</span>
+          <h2>What this project does not do</h2>
+          <p>Being explicit about the boundary is part of the design. Nothing below is implemented today.</p>
+        </div>
+
+        <div class="two-col" data-reveal>
+          <div class="info-panel">
+            <h3>Known limitations</h3>
+            <ul>
+              <li>Retrieval is similarity search only. There is no hybrid keyword search and no reranking stage.</li>
+              <li>Answer generation requires the Groq API; free-tier rate and token limits can reject requests.</li>
+              <li>Scanned or image-only PDFs will not yield text without OCR, which is not implemented.</li>
+              <li>Complex DOCX tables and layouts may lose structure when extracted as plain text.</li>
+              <li>Chunking is character-based with fixed defaults, not semantic or layout-aware.</li>
+              <li>The app has no authentication or per-user isolation; it is a local, single-user tool.</li>
+              <li>Responses are not streamed; the answer appears when the request completes.</li>
+              <li>Grounded prompting reduces invented answers but cannot guarantee correctness.</li>
+            </ul>
+          </div>
+
+          <div class="info-panel info-panel--future">
+            <span class="info-panel__label">Not implemented — future work</span>
+            <h3>Possible next steps</h3>
+            <ul>
+              <li>Hybrid retrieval with a keyword index, followed by a reranker.</li>
+              <li>OCR for scanned documents and better table extraction.</li>
+              <li>Streaming answers with incremental source rendering.</li>
+              <li>An evaluation harness for retrieval quality and answer faithfulness.</li>
+              <li>Authentication and per-user document libraries.</li>
+              <li>Background ingestion for very large files and richer document metadata.</li>
+              <li>Deployment hardening: containers, worker strategy and an external vector store.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= H. credits -->
+    <section class="section section--soft" id="credits">
+      <div class="container">
+        <div class="section-head section-head--left" data-reveal>
+          <span class="eyebrow">Credits</span>
+          <h2>Built and maintained by</h2>
+        </div>
+
+        <div class="credit-card" data-reveal>
+          <div class="credit-avatar" aria-hidden="true">OC</div>
+          <div>
+            <h3>Om-codex</h3>
+            <p>Design, backend, frontend and documentation. Built as a complete RAG engineering project with FastAPI, LangChain, ChromaDB, sentence-transformers and Groq.</p>
+            <div class="credit-links">
+              <a class="btn btn--secondary btn--sm" href="https://github.com/Om-codex" target="_blank" rel="noopener noreferrer">GitHub profile</a>
+              <a class="btn btn--secondary btn--sm" href="tour.html?tour=rag">Replay the engine tour</a>
+              <a class="btn btn--primary btn--sm" href="chat.html">Open Chatbot</a>
+            </div>
+          </div>
+        </div>
+
+        <p class="tech-note">Model and library credits belong to their respective projects: LangChain, Chroma, Hugging Face sentence-transformers, Groq and FastAPI.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="site-brand" href="index.html">
+            <span class="site-brand__mark" aria-hidden="true">DC</span>
+            <span class="site-brand__text">
+              <strong>Document Chatbot</strong>
+              <span>Grounded RAG answers</span>
+            </span>
+          </a>
+          <p>A retrieval-augmented document assistant built as a complete, inspectable engineering project &mdash; not a demo mock-up.</p>
+        </div>
+
+        <div class="footer-col">
+          <h3>Product</h3>
+          <a href="chat.html">Open chatbot</a>
+          <a href="tour.html?tour=rag">Explore the RAG engine</a>
+          <a href="tour.html?tour=app">How to use the app</a>
+        </div>
+
+        <div class="footer-col">
+          <h3>Project</h3>
+          <a href="about.html">About this project</a>
+          <a href="about.html#decisions">Engineering decisions</a>
+          <a href="https://github.com/Om-codex" target="_blank" rel="noopener noreferrer">GitHub profile</a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>&copy; <span id="year">2026</span> Document Chatbot. Built with LangChain, ChromaDB, FastAPI and Groq.</span>
+        <span>Answers are grounded in your files. Verify important details against the source.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/site.js" defer></script>
+  <script type="module" src="js/about.js"></script>
+</body>
+</html>
