@@ -101,6 +101,10 @@ directly.
 - API docs: <http://127.0.0.1:8000/docs>
 - Root: <http://127.0.0.1:8000/> (JSON service banner)
 
+The **Sources** box in the composer sets how many chunks are retrieved and passed
+to the LLM (1–20, default 3). The value is clamped to that range and remembered in
+the browser via `localStorage`.
+
 Run **one** Uvicorn worker in local development. Chroma's persistent mode is
 SQLite-backed and multiple writers can lock or corrupt the same directory.
 

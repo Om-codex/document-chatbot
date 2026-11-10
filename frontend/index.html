@@ -111,16 +111,10 @@
               <div class="composer-meta">
                 <label class="select-field" for="top-k">
                   <span class="muted small">Sources</span>
-                  <select id="top-k" aria-label="Number of source chunks to retrieve">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3" selected>3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="8">8</option>
-                    <option value="10">10</option>
-                  </select>
+                  <input id="top-k" type="number" min="1" max="20" step="1" value="3"
+                         inputmode="numeric" autocomplete="off"
+                         title="How many document chunks to retrieve (1–20)"
+                         aria-label="Number of source chunks to retrieve (1 to 20)" />
                 </label>
                 <span id="question-count" class="muted small">0 / 4000</span>
                 <button id="send-btn" class="btn btn--primary" type="submit" disabled>Send</button>

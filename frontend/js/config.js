@@ -25,6 +25,8 @@ export const CONFIG = {
   maxTitleChars: 120,
   mockLatencyMs: 600,
   allowedExtensions: [".pdf", ".txt", ".docx"],
+  minTopK: 1,
+  maxTopK: 20,
   defaultTopK: 3,
-  topKOptions: [1, 2, 3, 4, 5, 6, 8, 10],
+  topKStorageKey: "document-chatbot.topK",
 };

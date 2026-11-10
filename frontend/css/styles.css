@@ -1021,7 +1021,8 @@ button:disabled {
   gap: 6px;
 }
 
-.select-field select {
+.select-field select,
+.select-field input[type="number"] {
   height: 28px;
   padding: 0 6px;
   border: 1px solid var(--border-strong);
@@ -1030,12 +1031,23 @@ button:disabled {
   color: var(--text);
   font-size: 0.78rem;
   font-weight: 600;
-  cursor: pointer;
   outline: none;
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.select-field select:focus {
+.select-field select {
+  cursor: pointer;
+}
+
+.select-field input[type="number"] {
+  width: 58px;
+  padding-right: 2px;
+  text-align: center;
+  cursor: text;
+}
+
+.select-field select:focus,
+.select-field input[type="number"]:focus {
   border-color: var(--accent);
   box-shadow: var(--focus);
 }

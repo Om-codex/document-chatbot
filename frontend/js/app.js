@@ -71,7 +71,7 @@ const state = {
   chatController: null,
   loaded: false,
   health: null,
-  topK: CONFIG.defaultTopK,
+  topK: readStoredTopK(),
 };
 
 let progressHideTimer = null;
@@ -101,6 +101,50 @@ function safeFilename(title) {
     .replace(/[. ]+$/g, "")
     .trim();
   return cleaned || "pasted-text";
+}
+
+function clampTopK(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return CONFIG.defaultTopK;
+  return Math.min(CONFIG.maxTopK, Math.max(CONFIG.minTopK, Math.round(numeric)));
+}
+
+function readStoredTopK() {
+  try {
+    const stored = window.localStorage.getItem(CONFIG.topKStorageKey);
+    return stored === null ? CONFIG.defaultTopK : clampTopK(stored);
+  } catch {
+    return CONFIG.defaultTopK;
+  }
+}
+
+function storeTopK(value) {
+  try {
+    window.localStorage.setItem(CONFIG.topKStorageKey, String(value));
+  } catch {
+    // Storage can be unavailable (private mode / blocked cookies). The value
+    // still applies to the current session.
+  }
+}
+
+function applyTopKFromInput({ commit = false } = {}) {
+  const raw = dom.topK.value.trim();
+
+  if (raw !== "") {
+    const value = Number(raw);
+    if (Number.isInteger(value) && value >= CONFIG.minTopK && value <= CONFIG.maxTopK) {
+      state.topK = value;
+      storeTopK(value);
+    }
+  }
+
+  if (commit) {
+    state.topK = clampTopK(raw === "" ? state.topK : raw);
+    dom.topK.value = String(state.topK);
+    storeTopK(state.topK);
+  }
+
+  updateComposer();
 }
 
 function errorText(error) {
@@ -1023,11 +1067,9 @@ function bindEvents() {
 
   dom.selectAll.addEventListener("change", () => setSelectAll(dom.selectAll.checked));
 
-  dom.topK.addEventListener("change", () => {
-    const value = Number(dom.topK.value);
-    state.topK = Number.isFinite(value) ? value : CONFIG.defaultTopK;
-    updateComposer();
-  });
+  dom.topK.addEventListener("input", () => applyTopKFromInput());
+  dom.topK.addEventListener("change", () => applyTopKFromInput({ commit: true }));
+  dom.topK.addEventListener("blur", () => applyTopKFromInput({ commit: true }));
 
   dom.question.addEventListener("input", () => {
     autoGrow();
