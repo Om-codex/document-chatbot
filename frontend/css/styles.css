@@ -17,6 +17,7 @@
   --accent-strong: #4338ca;
   --accent-soft: #eef2ff;
   --accent-border: #c7d2fe;
+  --accent-disabled: #a5b4fc;
   --danger: #b91c1c;
   --danger-soft: #fef2f2;
   --danger-border: #fecaca;
@@ -33,6 +34,38 @@
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   --focus: 0 0 0 3px rgba(79, 70, 229, 0.22);
+  color-scheme: light;
+}
+
+/* Dark palette. Toggled by setting data-theme="dark" on <html>. */
+:root[data-theme="dark"] {
+  --bg: #0b1120;
+  --bg-accent: #111a2e;
+  --surface: #111827;
+  --surface-2: #0f172a;
+  --surface-3: #1e293b;
+  --border: #24324a;
+  --border-strong: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-strong: #a5b4fc;
+  --accent-soft: rgba(99, 102, 241, 0.16);
+  --accent-border: rgba(129, 140, 248, 0.4);
+  --accent-disabled: #3730a3;
+  --danger: #fca5a5;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --danger-border: rgba(248, 113, 113, 0.36);
+  --warning: #fcd34d;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --warning-border: rgba(251, 191, 36, 0.36);
+  --success: #86efac;
+  --success-soft: rgba(74, 222, 128, 0.12);
+  --success-border: rgba(74, 222, 128, 0.36);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --focus: 0 0 0 3px rgba(99, 102, 241, 0.38);
+  color-scheme: dark;
 }
 
 *,
@@ -61,6 +94,13 @@ body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(1100px 500px at 10% -10%, rgba(79, 70, 229, 0.2) 0%, transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(139, 92, 246, 0.14) 0%, transparent 55%),
+    var(--bg);
 }
 
 h1,
@@ -135,6 +175,35 @@ button:disabled {
   justify-content: space-between;
   gap: 16px;
   padding: 6px 4px 18px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-toggle {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.theme-icon--sun {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-icon--moon {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-icon--sun {
+  display: block;
 }
 
 .brand {
@@ -365,7 +434,7 @@ button:disabled {
 }
 
 .btn--primary:disabled {
-  background: #a5b4fc;
+  background: var(--accent-disabled);
   box-shadow: none;
 }
 
@@ -663,7 +732,7 @@ button:disabled {
   gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #fff, var(--surface-2));
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
 }
 
 .chat-head h2 {
@@ -782,7 +851,7 @@ button:disabled {
 
 .message--user .avatar {
   background: var(--text);
-  color: #fff;
+  color: var(--surface);
 }
 
 .message-body {
@@ -826,7 +895,7 @@ button:disabled {
 .error-code {
   padding: 2px 6px;
   border-radius: 5px;
-  background: #fff;
+  background: var(--surface);
   color: var(--danger);
   font-family: var(--mono);
   font-size: 0.66rem;
@@ -838,7 +907,7 @@ button:disabled {
   padding: 6px 11px;
   border: 1px solid var(--danger-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
   color: var(--danger);
   font-size: 0.78rem;
   font-weight: 650;
@@ -913,7 +982,7 @@ button:disabled {
   padding: 9px 11px;
   border: 1px solid var(--border);
   border-radius: 9px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .source-top {
@@ -990,7 +1059,7 @@ button:disabled {
 }
 
 #question::placeholder {
-  color: #94a3b8;
+  color: var(--muted);
 }
 
 .composer-bar {
@@ -1311,4 +1380,30 @@ button:disabled {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ------------------------------------------------------- dark adjustments */
+
+:root[data-theme="dark"] .type-badge--pdf {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+}
+
+:root[data-theme="dark"] .type-badge--txt {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+:root[data-theme="dark"] .type-badge--markdown {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+:root[data-theme="dark"] .type-badge--docx {
+  background: rgba(168, 85, 247, 0.16);
+  color: #d8b4fe;
+}
+
+:root[data-theme="dark"] .dialog {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
 }

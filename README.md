@@ -105,6 +105,9 @@ The **Sources** box in the composer sets how many chunks are retrieved and passe
 to the LLM (1–20, default 3). The value is clamped to that range and remembered in
 the browser via `localStorage`.
 
+The header toggle switches between light and dark themes. It follows the OS
+preference on first visit, then remembers the user's choice in `localStorage`.
+
 Run **one** Uvicorn worker in local development. Chroma's persistent mode is
 SQLite-backed and multiple writers can lock or corrupt the same directory.
 
