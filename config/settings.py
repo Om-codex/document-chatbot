@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     qdrant_collection_name: str = "document_collection_v2_gemini"
     qdrant_distance: str = "Cosine"
     qdrant_upsert_batch_size: int = 100
+    qdrant_timeout_seconds: float = 30.0
+
+    # -------------------------------------
+    # HTTP Client Timeouts
+    # -------------------------------------
+
+    # Timeout for outbound HTTP requests to Qdrant, Groq, and Gemini APIs.
+    http_request_timeout_seconds: float = 30.0
 
     # -------------------------------------
     # Text Splitting Configuration
