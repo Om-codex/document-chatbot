@@ -65,11 +65,21 @@ class Settings(BaseSettings):
     normalize_embeddings: bool = True
 
     # -------------------------------------
-    # ChromaDB Configuration
+    # ChromaDB Configuration (kept for rollback)
     # -------------------------------------
 
     chroma_collection_name: str = "document_collection_v2"
     chroma_persist_directory: Path = BASE_DIR / "data" / "chroma_db"
+
+    # -------------------------------------
+    # Qdrant Cloud Configuration
+    # -------------------------------------
+
+    qdrant_url: str | None = None
+    qdrant_api_key: SecretStr | None = None
+    qdrant_collection_name: str = "document_collection_v2_gemini"
+    qdrant_distance: str = "Cosine"
+    qdrant_upsert_batch_size: int = 100
 
     # -------------------------------------
     # Text Splitting Configuration
