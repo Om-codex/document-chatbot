@@ -20,10 +20,12 @@ def get_retriever(k: int = settings.default_top_k, doc_ids: list[str] | None = N
 
     if doc_ids:
         # Qdrant filter syntax (replaces Chroma's {"doc_id": {"$in": doc_ids}})
+        # QdrantVectorStore nests metadata under the "metadata" key, so we
+        # filter on "metadata.doc_id".
         search_kwargs["filter"] = Filter(
             must=[
                 FieldCondition(
-                    key="doc_id",
+                    key="metadata.doc_id",
                     match=MatchAny(any=doc_ids),
                 )
             ]
