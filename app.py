@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -7,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from api.routes.chat import router as chat_router
 from api.routes.documents import router as documents_router
@@ -47,7 +49,34 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Request timeout middleware (added after CORS, before route handlers)
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """Wrap each request with a timeout to prevent hanging on slow external calls."""
+
+    def __init__(self, app, timeout_seconds: float):
+        super().__init__(app)
+        self.timeout_seconds = timeout_seconds
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await asyncio.wait_for(
+                call_next(request), timeout=self.timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "detail": {
+                        "code": "REQUEST_TIMEOUT",
+                        "message": "The request timed out.",
+                    }
+                },
+            )
+
+
 # configure CORS (needed only when the frontend is served from another origin)
+# In production, set CORS_ALLOW_ORIGINS to the exact Cloudflare frontend origin
+# (e.g. https://document-chatbot.omm512462.workers.dev) instead of "*".
 allow_all_origins = "*" in settings.cors_allow_origins
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +84,12 @@ app.add_middleware(
     allow_credentials=not allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Request timeout middleware (after CORS)
+app.add_middleware(
+    RequestTimeoutMiddleware,
+    timeout_seconds=settings.http_request_timeout_seconds,
 )
 
 
