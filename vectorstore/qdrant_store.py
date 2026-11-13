@@ -175,10 +175,10 @@ def add_documents(chunks) -> list[str]:
 
     # Deterministic UUID string IDs from chunk IDs.
     new_ids = [f"{doc_id}_{chunk.metadata['chunk_index']}" for chunk in chunks]
-    new_id_set = set(new_ids)
     new_uuid_ids = [_chunk_id_to_uuid(cid) for cid in new_ids]
+    new_uuid_set = set(new_uuid_ids)
 
-    # Find existing chunks for this document.
+    # Find existing chunks for this document (scroll returns UUID point IDs).
     existing_points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
         scroll_filter=_doc_id_filter(doc_id),
@@ -186,14 +186,16 @@ def add_documents(chunks) -> list[str]:
         with_vectors=False,
         limit=10000,
     )
-    existing_ids = [str(point.id) for point in existing_points] if existing_points else []
-    stale_ids = [cid for cid in existing_ids if cid not in new_id_set]
+    existing_uuid_ids = [str(point.id) for point in existing_points] if existing_points else []
+
+    # Stale UUIDs are those that exist but are not in the new set.
+    stale_uuid_ids = [uid for uid in existing_uuid_ids if uid not in new_uuid_set]
 
     logger.info(
         "Storing document chunks: doc_id=%s chunks=%d stale_chunks=%d",
         doc_id[:12],
         len(chunks),
-        len(stale_ids),
+        len(stale_uuid_ids),
     )
 
     # Generate embeddings for all chunks.
@@ -224,18 +226,17 @@ def add_documents(chunks) -> list[str]:
             points=batch_points,
         )
 
-    if stale_ids:
-        stale_uuids = [_chunk_id_to_uuid(cid) for cid in stale_ids]
+    if stale_uuid_ids:
         try:
             client.delete(
                 collection_name=COLLECTION_NAME,
-                points_selector=stale_uuids,
+                points_selector=stale_uuid_ids,
             )
         except Exception:
             logger.exception(
                 "Failed to delete stale chunks: doc_id=%s stale_chunks=%d",
                 doc_id[:12],
-                len(stale_ids),
+                len(stale_uuid_ids),
             )
             raise
 
