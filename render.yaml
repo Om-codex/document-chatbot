@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: document-chatbot
+    env: python
+    region: oregon  # closest to Qdrant eu-west-1 and Groq
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1"
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: CORS_ALLOW_ORIGINS
+        value: '["https://document-chatbot.omm512462.workers.dev"]'
+      - key: EMBEDDING_BATCH_SIZE
+        value: 50
+      - key: EMBEDDING_MAX_RETRIES
+        value: 3
+      - key: EMBEDDING_INITIAL_BACKOFF_SECONDS
+        value: 1.0
+      - key: EMBEDDING_DIMENSIONS
+        value: 768
+      - key: QDRANT_COLLECTION_NAME
+        value: document_collection_v2_gemini
+      - key: QDRANT_DISTANCE
+        value: Cosine
+      - key: QDRANT_UPSERT_BATCH_SIZE
+        value: 100
+      - key: QDRANT_TIMEOUT_SECONDS
+        value: 30
+      - key: HTTP_REQUEST_TIMEOUT_SECONDS
+        value: 30
