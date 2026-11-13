@@ -220,6 +220,12 @@ def get_all_documents() -> list[dict]:
 
     client = _get_qdrant_client()
 
+    # If the collection doesn't exist yet, there are no documents.
+    try:
+        client.get_collection(COLLECTION_NAME)
+    except Exception:
+        return []
+
     # Scroll all points with payload (no vectors needed).
     all_points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
@@ -260,6 +266,13 @@ def document_exists(doc_id: str) -> bool:
     """Return True when at least one chunk is stored for ``doc_id``."""
 
     client = _get_qdrant_client()
+
+    # If the collection doesn't exist yet, the document doesn't exist.
+    try:
+        client.get_collection(COLLECTION_NAME)
+    except Exception:
+        return False
+
     points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
         scroll_filter=_doc_id_filter(doc_id),
@@ -274,6 +287,13 @@ def count_document_chunks(doc_id: str) -> int:
     """Return the number of stored chunks for ``doc_id``."""
 
     client = _get_qdrant_client()
+
+    # If the collection doesn't exist yet, there are no chunks.
+    try:
+        client.get_collection(COLLECTION_NAME)
+    except Exception:
+        return 0
+
     points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
         scroll_filter=_doc_id_filter(doc_id),
