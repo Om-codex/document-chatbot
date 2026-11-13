@@ -48,10 +48,14 @@ def _chunk_id_to_uuid(chunk_id: str) -> str:
 
 
 def _doc_id_filter(doc_id: str) -> Filter:
-    """Build a Qdrant filter matching a single ``doc_id`` in point payload."""
+    """Build a Qdrant filter matching a single ``doc_id`` in point payload.
+
+    QdrantVectorStore nests document metadata under the ``metadata`` key, so
+    we filter on ``metadata.doc_id``.
+    """
 
     return Filter(
-        must=[FieldCondition(key="doc_id", match=MatchAny(any=[doc_id]))]
+        must=[FieldCondition(key="metadata.doc_id", match=MatchAny(any=[doc_id]))]
     )
 
 
@@ -59,7 +63,12 @@ def _doc_ids_filter(doc_ids: list[str]) -> Filter:
     """Build a Qdrant filter matching any of the given ``doc_ids`` in payload."""
 
     return Filter(
-        must=[FieldCondition(key="doc_id", match=MatchAny(any=doc_ids))]
+        must=[
+            FieldCondition(
+                key="metadata.doc_id",
+                match=MatchAny(any=doc_ids),
+            )
+        ]
     )
 
 
@@ -109,10 +118,10 @@ def _ensure_collection(client: QdrantClient) -> None:
         vectors_config=VectorParams(size=VECTOR_SIZE, distance=distance),
     )
 
-    # Create a payload index on doc_id so metadata filtering works.
+    # Create a payload index on metadata.doc_id so metadata filtering works.
     client.create_payload_index(
         collection_name=COLLECTION_NAME,
-        field_name="doc_id",
+        field_name="metadata.doc_id",
         field_schema="keyword",
     )
 
@@ -238,7 +247,8 @@ def get_all_documents() -> list[dict]:
 
     for point in all_points or []:
         payload = point.payload or {}
-        doc_id = payload.get("doc_id")
+        metadata = payload.get("metadata", {})
+        doc_id = metadata.get("doc_id")
 
         if not doc_id:
             continue
@@ -246,8 +256,8 @@ def get_all_documents() -> list[dict]:
         if doc_id not in documents:
             documents[doc_id] = {
                 "doc_id": doc_id,
-                "filename": payload.get("filename"),
-                "total_pages": payload.get("total_pages"),
+                "filename": metadata.get("filename"),
+                "total_pages": metadata.get("total_pages"),
                 "total_chunks": 0,
             }
 
@@ -350,9 +360,9 @@ def get_document_count() -> int:
         return 0
 
     doc_ids = {
-        (point.payload or {}).get("doc_id")
+        (point.payload or {}).get("metadata", {}).get("doc_id")
         for point in (points or [])
-        if (point.payload or {}).get("doc_id")
+        if (point.payload or {}).get("metadata", {}).get("doc_id")
     }
 
     return len(doc_ids)
