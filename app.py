@@ -26,7 +26,7 @@ async def lifespan(_: FastAPI):
         "Configuration loaded: llm_model=%s embedding_model=%s collection=%s",
         settings.llm_model,
         settings.gemini_embedding_model,
-        settings.chroma_collection_name,
+        settings.qdrant_collection_name,
     )
 
     if settings.groq_api_key is None:
