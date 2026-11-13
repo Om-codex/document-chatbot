@@ -17,10 +17,6 @@ chromadb==1.5.9
 # LLM provider (Groq is OpenAI-compatible but has its own integration)
 langchain-groq==1.1.3
 
-# Local Hugging Face embeddings (sentence-transformers brings torch)
-langchain-huggingface==1.2.3
-sentence-transformers==6.2.0
-
 # Document loaders
 pypdf==6.21.4
 docx2txt==0.9
