@@ -20,6 +20,7 @@ from qdrant_client.http.models import (
     FieldCondition,
     Filter,
     MatchAny,
+    PointStruct,
     VectorParams,
 )
 
@@ -169,8 +170,8 @@ def add_documents(chunks) -> list[str]:
     if any(chunk.metadata.get("doc_id") != doc_id for chunk in chunks):
         raise ValueError("All chunks must belong to the same document!")
 
-    vector_store = get_vector_store()
     client = _get_qdrant_client()
+    _ensure_collection(client)
 
     # Deterministic UUID string IDs from chunk IDs.
     new_ids = [f"{doc_id}_{chunk.metadata['chunk_index']}" for chunk in chunks]
@@ -195,15 +196,32 @@ def add_documents(chunks) -> list[str]:
         len(stale_ids),
     )
 
-    # Upsert new chunks in batches.  QdrantVectorStore handles embedding
-    # via the configured GeminiEmbedding function.
-    for start in range(0, len(chunks), UPSERT_BATCH_SIZE):
-        batch_chunks = chunks[start : start + UPSERT_BATCH_SIZE]
-        batch_uuid_ids = new_uuid_ids[start : start + UPSERT_BATCH_SIZE]
+    # Generate embeddings for all chunks.
+    embedding_model = get_embedding_model()
+    texts = [chunk.page_content for chunk in chunks]
+    vectors = embedding_model.embed_documents(texts)
 
-        vector_store.add_documents(
-            documents=batch_chunks,
-            ids=batch_uuid_ids,
+    # Upsert points directly with deterministic UUIDs.  Using the raw client
+    # ensures the exact IDs we computed are stored, which is required for
+    # stale-chunk cleanup to work correctly.
+    points = [
+        PointStruct(
+            id=uuid_id,
+            vector=vector,
+            payload={
+                "page_content": chunk.page_content,
+                "metadata": chunk.metadata,
+            },
+        )
+        for uuid_id, vector, chunk in zip(new_uuid_ids, vectors, chunks)
+    ]
+
+    # Upsert in batches.
+    for start in range(0, len(points), UPSERT_BATCH_SIZE):
+        batch_points = points[start : start + UPSERT_BATCH_SIZE]
+        client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=batch_points,
         )
 
     if stale_ids:
