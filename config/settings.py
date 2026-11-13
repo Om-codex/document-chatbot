@@ -58,8 +58,8 @@ class Settings(BaseSettings):
     gemini_embedding_model: str = "gemini-embedding-2"
     embedding_dimensions: int = 768
     embedding_batch_size: int = 50
-    embedding_max_retries: int = 3
-    embedding_initial_backoff_seconds: float = 1.0
+    embedding_max_retries: int = 6
+    embedding_initial_backoff_seconds: float = 3.0
 
     # Normalize embeddings (L2) after retrieval from the API.
     normalize_embeddings: bool = True
