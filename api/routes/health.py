@@ -33,6 +33,6 @@ def health():
         "app_version": settings.app_version,
         "llm_model": settings.llm_model,
         "embedding_model": settings.gemini_embedding_model,
-        "collection": settings.chroma_collection_name,
+        "collection": settings.qdrant_collection_name,
         "document_count": document_count,
     }
