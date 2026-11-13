@@ -52,12 +52,16 @@ class Settings(BaseSettings):
     # Embedding Configuration
     # -------------------------------------
 
-    # Accept the older EMBEDDING_MODEL name as well as EMBEDDING_MODEL_NAME.
-    embedding_model_name: str = Field(
-        default="sentence-transformers/all-MiniLM-L6-v2",
-        validation_alias=AliasChoices("embedding_model_name", "embedding_model"),
-    )
-    embedding_device: str = "cpu"
+    # Google Gemini Embedding API configuration.
+    # Replaces local sentence-transformers inference for low-memory deployment.
+    gemini_api_key: SecretStr | None = None
+    gemini_embedding_model: str = "gemini-embedding-2"
+    embedding_dimensions: int = 768
+    embedding_batch_size: int = 50
+    embedding_max_retries: int = 3
+    embedding_initial_backoff_seconds: float = 1.0
+
+    # Normalize embeddings (L2) after retrieval from the API.
     normalize_embeddings: bool = True
 
     # -------------------------------------

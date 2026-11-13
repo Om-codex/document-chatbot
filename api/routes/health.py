@@ -32,7 +32,7 @@ def health():
         "app_name": settings.app_name,
         "app_version": settings.app_version,
         "llm_model": settings.llm_model,
-        "embedding_model": settings.embedding_model_name,
+        "embedding_model": settings.gemini_embedding_model,
         "collection": settings.chroma_collection_name,
         "document_count": document_count,
     }

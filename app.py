@@ -25,7 +25,7 @@ async def lifespan(_: FastAPI):
     logger.info(
         "Configuration loaded: llm_model=%s embedding_model=%s collection=%s",
         settings.llm_model,
-        settings.embedding_model_name,
+        settings.gemini_embedding_model,
         settings.chroma_collection_name,
     )
 
