@@ -1,8 +1,7 @@
 import logging
-import shutil
+import tempfile
 from pathlib import Path
 from typing import BinaryIO
-from uuid import uuid4
 
 from config.settings import settings
 from ingestion.exceptions import (
@@ -10,7 +9,7 @@ from ingestion.exceptions import (
     EmptyDocumentError as IngestionEmptyDocumentError,
     UnsupportedDocumentFormatError,
 )
-from ingestion.pipeline import generate_document_id, ingest_document
+from ingestion.pipeline import ingest_document
 from services.exceptions import (
     DocumentDeletionError,
     DocumentNotFoundError,
@@ -43,7 +42,7 @@ MAX_FILE_SIZE = settings.max_file_size_bytes
 READ_CHUNK_SIZE = settings.upload_read_chunk_size
 
 
-def _cleanup_upload(document_dir: Path, doc_id: str | None, existed_before: bool) -> None:
+def _cleanup_upload(file_path: Path, doc_id: str | None, existed_before: bool) -> None:
     """Best-effort cleanup after a failed upload.
 
     Vector cleanup is only attempted for a brand-new document.  When replacing
@@ -58,12 +57,12 @@ def _cleanup_upload(document_dir: Path, doc_id: str | None, existed_before: bool
         except Exception:
             logger.exception("Failed to clean up partial vectors: doc_id=%s", doc_id[:12])
 
-    if document_dir.exists():
+    if file_path and file_path.exists():
         try:
-            shutil.rmtree(document_dir)
-            logger.info("Removed failed upload directory: %s", document_dir.name)
+            file_path.unlink()
+            logger.info("Removed temporary upload file: %s", file_path.name)
         except OSError:
-            logger.exception("Failed to remove upload directory: %s", document_dir.name)
+            logger.exception("Failed to remove temporary upload file: %s", file_path.name)
 
 
 # -----------------------------------------
@@ -85,16 +84,17 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
             "Unsupported file format. Upload PDF, DOCX, or TXT."
         )
 
-    upload_id = str(uuid4())
-    document_dir = UPLOAD_DIR / upload_id
-    document_dir.mkdir(parents=True, exist_ok=True)
-    file_path = document_dir / original_filename
+    # Temporary storage only -- the file is deleted after successful ingestion.
+    # Qdrant persists the chunk text and metadata, so the original file is not
+    # needed after vectors are stored.
+    temp_dir = Path(tempfile.mkdtemp(prefix="document-chatbot-upload-"))
+    file_path = temp_dir / original_filename
 
     logger.info(
-        "Upload started: filename=%s extension=%s upload_id=%s",
+        "Upload started: filename=%s extension=%s temp_dir=%s",
         original_filename,
         extension,
-        upload_id,
+        temp_dir.name,
     )
 
     doc_id: str | None = None
@@ -176,6 +176,17 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
             len(chunks),
         )
 
+        # Delete the temporary file -- Qdrant now holds the durable copy.
+        try:
+            file_path.unlink()
+            temp_dir.rmdir()
+            logger.info(
+                "Removed temporary file after successful ingestion: %s",
+                original_filename,
+            )
+        except OSError:
+            logger.exception("Failed to remove temporary file: %s", file_path.name)
+
         return {
             "message": "Document uploaded and indexed successfully.",
             "filename": original_filename,
@@ -190,7 +201,7 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
             original_filename,
             doc_id[:12] if doc_id else "n/a",
         )
-        _cleanup_upload(document_dir, doc_id, existed_before)
+        _cleanup_upload(file_path, doc_id, existed_before)
         raise
 
 
@@ -215,38 +226,11 @@ def list_documents() -> dict:
 # Delete Document
 # -----------------------------------------
 
-def _find_uploaded_files(doc_id: str) -> list[Path]:
-    """Find original files whose content hash matches ``doc_id``.
-
-    Only paths under ``UPLOAD_DIR`` are considered.  The scan is intentionally
-    content-based so it works regardless of which UUID directory was used.
-    """
-
-    matching_files: list[Path] = []
-
-    if not UPLOAD_DIR.exists():
-        return matching_files
-
-    for file_path in UPLOAD_DIR.rglob("*"):
-        if not file_path.is_file():
-            continue
-
-        try:
-            if generate_document_id(str(file_path)) == doc_id:
-                matching_files.append(file_path)
-        except OSError:
-            logger.warning("Could not hash uploaded file during deletion: %s", file_path.name)
-
-    return matching_files
-
-
 def delete_document(doc_id: str) -> dict:
-    """Delete vectors first, then the original upload files.
+    """Delete vectors belonging to ``doc_id``.
 
-    Vectors are deleted first so a failure leaves the document fully intact.
-    If a file cannot be removed after vectors are gone, the document is already
-    logically deleted; the response includes a warning and the orphaned file is
-    left for manual cleanup.
+    Original files are not stored persistently -- they are temporary during
+    ingestion only.  Deletion removes vectors from Qdrant.
     """
 
     try:
@@ -260,13 +244,10 @@ def delete_document(doc_id: str) -> dict:
     if document is None:
         raise DocumentNotFoundError("Document not found.")
 
-    matching_files = _find_uploaded_files(doc_id)
-
     logger.info(
-        "Document deletion started: doc_id=%s filename=%s files=%d",
+        "Document deletion started: doc_id=%s filename=%s",
         doc_id[:12],
         document.get("filename"),
-        len(matching_files),
     )
 
     try:
@@ -277,36 +258,11 @@ def delete_document(doc_id: str) -> dict:
 
     logger.info("Vector deletion completed: doc_id=%s", doc_id[:12])
 
-    deleted_files = 0
-    warnings: list[str] = []
-
-    for file_path in matching_files:
-        try:
-            file_path.unlink()
-            deleted_files += 1
-
-            try:
-                file_path.parent.rmdir()
-            except OSError:
-                # Directory is not empty (or already gone); nothing to do.
-                pass
-
-        except OSError:
-            logger.exception("File deletion failed: %s", file_path.name)
-            warnings.append(f"Could not delete the stored file: {file_path.name}")
-
-    logger.info(
-        "File deletion completed: doc_id=%s deleted_files=%d warnings=%d",
-        doc_id[:12],
-        deleted_files,
-        len(warnings),
-    )
-
     return {
         "message": "Document deleted successfully.",
         "doc_id": doc_id,
         "filename": document["filename"],
-        "deleted_files": deleted_files,
+        "deleted_files": 0,
         "vectors_deleted": True,
-        "warnings": warnings,
+        "warnings": [],
     }
