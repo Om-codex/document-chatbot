@@ -10,6 +10,7 @@ aggregator, replace the formatter with JSON in one place.
 """
 
 import logging
+import re
 import sys
 
 
@@ -25,6 +26,37 @@ _NOISY_LOGGERS = (
     "transformers",
     "urllib3",
 )
+
+# Known secret prefixes that must never appear in logs.
+_SECRET_PREFIXES = (
+    "sk-",        # OpenAI-style keys
+    "gsk_",       # Groq keys
+    "eyJ",        # JWT tokens (base64 header)
+    "hf_",        # Hugging Face tokens
+)
+
+# Compile a regex that matches any secret token: prefix followed by non-space chars.
+_SECRET_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(p) for p in _SECRET_PREFIXES) + r")\S*"
+)
+
+_configured = False
+
+
+class SecretRedactionFilter(logging.Filter):
+    """Redact known secret prefixes from log messages before they are emitted."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.msg and isinstance(record.msg, str):
+            record.msg = _SECRET_PATTERN.sub("[REDACTED]", record.msg)
+        # Also redact any args that are strings.
+        if record.args:
+            record.args = tuple(
+                _SECRET_PATTERN.sub("[REDACTED]", str(a)) if isinstance(a, str) else a
+                for a in record.args
+            )
+        return True
+
 
 _configured = False
 
@@ -50,6 +82,10 @@ def configure_logging(level: str | int = "INFO") -> None:
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
             root_logger.addHandler(handler)
+
+        # Add secret redaction to every handler so keys never leak to logs.
+        for handler in root_logger.handlers:
+            handler.addFilter(SecretRedactionFilter())
 
         for logger_name in _NOISY_LOGGERS:
             logging.getLogger(logger_name).setLevel(logging.WARNING)
