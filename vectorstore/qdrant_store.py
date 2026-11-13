@@ -106,9 +106,17 @@ def _ensure_collection(client: QdrantClient) -> None:
                     field_name="metadata.doc_id",
                     field_schema="keyword",
                 )
-            except Exception:
-                # Index may already exist — that's fine.
-                logger.debug("Payload index on metadata.doc_id already exists")
+                logger.info(
+                    "Created payload index on metadata.doc_id for collection %s",
+                    COLLECTION_NAME,
+                )
+            except Exception as exc:
+                # Index may already exist (409) — that's fine.  Log a warning
+                # so the operator knows filtering may not work without it.
+                logger.warning(
+                    "Could not create payload index on metadata.doc_id: %s",
+                    exc,
+                )
             return
     except Exception:
         logger.debug("Could not list collections; will attempt creation.")
