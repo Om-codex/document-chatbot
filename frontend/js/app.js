@@ -58,6 +58,12 @@ const dom = {
   textClose: document.getElementById("text-close"),
   textCancel: document.getElementById("text-cancel"),
   textSave: document.getElementById("text-save"),
+
+  confirmDialog: document.getElementById("confirm-dialog"),
+  confirmDocName: document.getElementById("confirm-doc-name"),
+  confirmCancel: document.getElementById("confirm-cancel"),
+  confirmDelete: document.getElementById("confirm-delete"),
+  confirmClose: document.getElementById("confirm-close"),
 };
 
 const state = {
@@ -445,9 +451,8 @@ function removeDocumentLocally(docId) {
 async function deleteDocument(doc) {
   if (state.deleting.has(doc.doc_id)) return;
 
-  const confirmed = window.confirm(
-    `Delete “${doc.filename}” and its indexed chunks?\n\nThis cannot be undone.`
-  );
+  // Show confirmation dialog instead of native window.confirm.
+  const confirmed = await confirmDeletion(doc.filename);
   if (!confirmed) return;
 
   state.deleting.add(doc.doc_id);
@@ -470,6 +475,42 @@ async function deleteDocument(doc) {
     updateScopeUI();
     updateComposer();
   }
+}
+
+/**
+ * Show a confirmation dialog for document deletion.
+ * Resolves to true if the user confirms, false if they cancel or close.
+ */
+function confirmDeletion(filename) {
+  return new Promise((resolve) => {
+    dom.confirmDocName.textContent = filename;
+
+    const onCancel = () => {
+      cleanup();
+      resolve(false);
+    };
+    const onConfirm = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onClose = () => {
+      cleanup();
+      resolve(false);
+    };
+
+    function cleanup() {
+      dom.confirmCancel.removeEventListener("click", onCancel);
+      dom.confirmDelete.removeEventListener("click", onConfirm);
+      dom.confirmClose.removeEventListener("click", onClose);
+      dom.confirmDialog.close();
+    }
+
+    dom.confirmCancel.addEventListener("click", onCancel, { once: true });
+    dom.confirmDelete.addEventListener("click", onConfirm, { once: true });
+    dom.confirmClose.addEventListener("click", onClose, { once: true });
+
+    dom.confirmDialog.showModal();
+  });
 }
 
 async function manualRefresh() {

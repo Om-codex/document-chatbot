@@ -1495,6 +1495,8 @@ button:disabled {
 /* ---------------------------------------------------------------- markdown */
 
 .message-text {
+
+.message-text {
   white-space: pre-wrap; /* preserve line breaks for code blocks */
 }
 
@@ -1615,4 +1617,40 @@ button:disabled {
 :root[data-theme="dark"] .message-text blockquote {
   background: var(--surface-3);
   color: var(--muted);
+}
+
+/* ------------------------------------------------------------- confirm dialog */
+
+.confirm-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.confirm-dialog .dialog-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.confirm-dialog .dialog-head p {
+  margin: 4px 0 0;
+}
+
+.confirm-dialog .dialog-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 0;
+}
+
+.btn--danger {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.24);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.btn--danger:disabled {
+  background: var(--accent-disabled);
+  box-shadow: none;
 }

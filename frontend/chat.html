@@ -227,6 +227,23 @@
     <button id="banner-close" class="banner-close" type="button" aria-label="Dismiss error">×</button>
   </div>
 
+  <!-- Confirm deletion dialog -->
+  <dialog id="confirm-dialog" class="dialog confirm-dialog" aria-labelledby="confirm-dialog-title">
+    <form id="confirm-form" class="dialog-form" novalidate>
+      <div class="dialog-head">
+        <div>
+          <h2 id="confirm-dialog-title">Delete document?</h2>
+          <p id="confirm-doc-name" class="muted small">This cannot be undone.</p>
+        </div>
+        <button id="confirm-close" class="icon-btn" type="button" aria-label="Close dialog">×</button>
+      </div>
+      <div class="dialog-actions">
+        <button id="confirm-cancel" class="btn btn--ghost" type="button">Cancel</button>
+        <button id="confirm-delete" class="btn btn--danger" type="button">Delete document</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="text-dialog" class="dialog" aria-labelledby="text-dialog-title">
     <form id="text-form" class="dialog-form" novalidate>
       <div class="dialog-head">
