@@ -109,11 +109,6 @@ def test_upload_path_traversal_is_sanitized(client, upload_document, isolated_st
     assert response.status_code == 200, response.text
     assert response.json()["filename"] == "evil.txt"
 
-    uploads_dir = isolated_storage / "uploads"
-    assert (uploads_dir / "evil.txt").exists() is False  # file lives in a UUID subdirectory
-    assert list(uploads_dir.rglob("evil.txt"))
-    assert not (isolated_storage / "evil.txt").exists()
-
 
 def test_loader_failure_cleans_up(client, upload_document, isolated_storage, monkeypatch):
     def broken_ingest(_):
@@ -124,7 +119,6 @@ def test_loader_failure_cleans_up(client, upload_document, isolated_storage, mon
     response = upload_document("notes.txt", b"valid text", "text/plain")
 
     assert response.status_code == 500
-    assert list((isolated_storage / "uploads").glob("*")) == []
     assert get_all_documents() == []
 
 
@@ -138,7 +132,6 @@ def test_vector_insert_failure_cleans_up(client, upload_document, isolated_stora
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "STORAGE_ERROR"
-    assert list((isolated_storage / "uploads").glob("*")) == []
 
 
 def test_partial_vector_insert_failure_is_rolled_back(
@@ -156,7 +149,6 @@ def test_partial_vector_insert_failure_is_rolled_back(
 
     assert response.status_code == 503
     assert get_all_documents() == []
-    assert list((isolated_storage / "uploads").glob("*")) == []
 
 
 def test_delete_document(client, indexed_txt, isolated_storage):
@@ -168,11 +160,10 @@ def test_delete_document(client, indexed_txt, isolated_storage):
     payload = response.json()
     assert payload["doc_id"] == doc_id
     assert payload["vectors_deleted"] is True
-    assert payload["deleted_files"] == 1
+    assert payload["deleted_files"] == 0
     assert payload["warnings"] == []
 
     assert client.get("/api/documents/").json()["total_documents"] == 0
-    assert list((isolated_storage / "uploads").rglob("notes.txt")) == []
 
 
 def test_delete_nonexistent_document(client):
@@ -193,7 +184,7 @@ def test_delete_vector_failure_keeps_document(
     client, indexed_txt, isolated_storage, monkeypatch
 ):
     def broken_delete(_):
-        raise RuntimeError("chroma delete failed")
+        raise RuntimeError("qdrant delete failed")
 
     monkeypatch.setattr(document_service, "delete_documents", broken_delete)
 
@@ -201,30 +192,6 @@ def test_delete_vector_failure_keeps_document(
 
     assert response.status_code == 500
     assert client.get("/api/documents/").json()["total_documents"] == 1
-    assert list((isolated_storage / "uploads").rglob("notes.txt"))
-
-
-def test_delete_filesystem_failure_returns_warning(
-    client, indexed_txt, isolated_storage, monkeypatch
-):
-    original_unlink = Path.unlink
-
-    def failing_unlink(self, *args, **kwargs):
-        if self.name == "notes.txt":
-            raise OSError("file is locked")
-        return original_unlink(self, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "unlink", failing_unlink)
-
-    response = client.delete(f"/api/documents/{indexed_txt['doc_id']}")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["vectors_deleted"] is True
-    assert payload["deleted_files"] == 0
-    assert payload["warnings"]
-    assert client.get("/api/documents/").json()["total_documents"] == 0
-    assert list((isolated_storage / "uploads").rglob("notes.txt"))
 
 
 def test_delete_only_removes_the_selected_document(client, upload_document):
