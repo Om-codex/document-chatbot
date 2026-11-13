@@ -92,11 +92,23 @@ def _ensure_collection(client: QdrantClient) -> None:
 
     The collection is created with ``VECTOR_SIZE`` dimensions and the
     configured distance metric (Cosine for normalized embeddings).
+    A payload index on ``metadata.doc_id`` is always ensured so that
+    metadata filtering works even when the collection already exists.
     """
 
     try:
         collections = client.get_collections().collections
         if any(c.name == COLLECTION_NAME for c in collections):
+            # Collection already exists — ensure payload index exists.
+            try:
+                client.create_payload_index(
+                    collection_name=COLLECTION_NAME,
+                    field_name="metadata.doc_id",
+                    field_schema="keyword",
+                )
+            except Exception:
+                # Index may already exist — that's fine.
+                logger.debug("Payload index on metadata.doc_id already exists")
             return
     except Exception:
         logger.debug("Could not list collections; will attempt creation.")
