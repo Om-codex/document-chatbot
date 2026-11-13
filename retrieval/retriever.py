@@ -1,7 +1,9 @@
 import logging
 
+from qdrant_client.http.models import FieldCondition, Filter, MatchAny
+
 from config.settings import settings
-from vectorstore.chroma_store import get_vector_store
+from vectorstore.qdrant_store import get_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,15 @@ def get_retriever(k: int = settings.default_top_k, doc_ids: list[str] | None = N
     search_kwargs: dict = {"k": k}
 
     if doc_ids:
-        search_kwargs["filter"] = {"doc_id": {"$in": doc_ids}}
+        # Qdrant filter syntax (replaces Chroma's {"doc_id": {"$in": doc_ids}})
+        search_kwargs["filter"] = Filter(
+            must=[
+                FieldCondition(
+                    key="doc_id",
+                    match=MatchAny(any=doc_ids),
+                )
+            ]
+        )
 
     logger.debug(
         "Creating retriever: k=%d selected_documents=%s",
