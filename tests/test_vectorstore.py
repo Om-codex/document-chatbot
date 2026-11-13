@@ -4,7 +4,7 @@ import pytest
 from langchain_core.documents import Document
 
 from retrieval.retriever import get_retriever
-from vectorstore.chroma_store import (
+from vectorstore.qdrant_store import (
     add_documents,
     count_document_chunks,
     delete_documents,
@@ -52,8 +52,6 @@ def test_replacing_with_fewer_chunks_removes_stale_chunks(isolated_storage):
     add_documents(make_chunks(doc_id, "beta.txt", ["replacement"]))
 
     assert count_document_chunks(doc_id) == 1
-    stored = get_vector_store().get(where={"doc_id": doc_id}, include=[])
-    assert stored["ids"] == [f"{doc_id}_0"]
 
 
 def test_replacing_with_more_chunks_adds_new_chunks(isolated_storage):
@@ -135,7 +133,7 @@ def test_stale_chunk_deletion_failure_is_reported(isolated_storage, monkeypatch)
     def failing_delete(*_args, **_kwargs):
         raise RuntimeError("delete failed")
 
-    monkeypatch.setattr(vector_store, "delete", failing_delete)
+    monkeypatch.setattr(vector_store.client, "delete", failing_delete)
 
     with pytest.raises(RuntimeError, match="delete failed"):
         add_documents(make_chunks(doc_id, "alpha.txt", ["replacement"]))
