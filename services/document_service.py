@@ -25,7 +25,7 @@ from utils.file_validation import FileSignatureError, validate_file_signature
 from utils.helpers import extension_of, sanitize_filename
 from utils.validation import InvalidDocumentIdError as InvalidDocumentIdFormatError
 from utils.validation import validate_doc_id
-from vectorstore.chroma_store import (
+from vectorstore.qdrant_store import (
     add_documents,
     delete_documents,
     document_exists,
