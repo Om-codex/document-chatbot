@@ -11,7 +11,6 @@ from vectorstore.qdrant_store import (
     document_exists,
     get_all_documents,
     get_document_count,
-    get_vector_store,
 )
 
 
@@ -128,12 +127,20 @@ def test_stale_chunk_deletion_failure_is_reported(isolated_storage, monkeypatch)
     doc_id = "l" * 64
     add_documents(make_chunks(doc_id, "alpha.txt", ["one", "two"]))
 
-    vector_store = get_vector_store()
+    from unittest.mock import MagicMock
+    from vectorstore import qdrant_store
 
-    def failing_delete(*_args, **_kwargs):
-        raise RuntimeError("delete failed")
+    mock_client = MagicMock()
+    mock_client.get_collections.return_value.collections = []
+    existing_point_0 = MagicMock()
+    existing_point_0.id = qdrant_store._chunk_id_to_uuid(f"{doc_id}_0")
+    existing_point_1 = MagicMock()
+    existing_point_1.id = qdrant_store._chunk_id_to_uuid(f"{doc_id}_1")
+    mock_client.scroll.return_value = ([existing_point_0, existing_point_1], None)
+    mock_client.delete.side_effect = RuntimeError("delete failed")
+    mock_client.upsert.return_value = None
 
-    monkeypatch.setattr(vector_store.client, "delete", failing_delete)
+    monkeypatch.setattr(qdrant_store, "_get_qdrant_client", lambda: mock_client)
 
     with pytest.raises(RuntimeError, match="delete failed"):
         add_documents(make_chunks(doc_id, "alpha.txt", ["replacement"]))
