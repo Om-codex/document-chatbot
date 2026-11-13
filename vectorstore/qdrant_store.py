@@ -109,6 +109,13 @@ def _ensure_collection(client: QdrantClient) -> None:
         vectors_config=VectorParams(size=VECTOR_SIZE, distance=distance),
     )
 
+    # Create a payload index on doc_id so metadata filtering works.
+    client.create_payload_index(
+        collection_name=COLLECTION_NAME,
+        field_name="doc_id",
+        field_schema="keyword",
+    )
+
 
 @lru_cache(maxsize=1)
 def get_vector_store() -> QdrantVectorStore:
@@ -165,8 +172,8 @@ def add_documents(chunks) -> list[str]:
     existing_points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
         scroll_filter=_doc_id_filter(doc_id),
-        include_payload=False,
-        include_vectors=False,
+        with_payload=False,
+        with_vectors=False,
         limit=10000,
     )
     existing_ids = [str(point.id) for point in existing_points] if existing_points else []
@@ -216,8 +223,8 @@ def get_all_documents() -> list[dict]:
     # Scroll all points with payload (no vectors needed).
     all_points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
-        include_payload=True,
-        include_vectors=False,
+        with_payload=True,
+        with_vectors=False,
         limit=10000,
     )
 
@@ -256,8 +263,8 @@ def document_exists(doc_id: str) -> bool:
     points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
         scroll_filter=_doc_id_filter(doc_id),
-        include_payload=False,
-        include_vectors=False,
+        with_payload=False,
+        with_vectors=False,
         limit=1,
     )
     return bool(points)
@@ -270,8 +277,8 @@ def count_document_chunks(doc_id: str) -> int:
     points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
         scroll_filter=_doc_id_filter(doc_id),
-        include_payload=False,
-        include_vectors=False,
+        with_payload=False,
+        with_vectors=False,
         limit=10000,
     )
     return len(points) if points else 0
@@ -315,8 +322,8 @@ def get_document_count() -> int:
     try:
         points, _ = client.scroll(
             collection_name=COLLECTION_NAME,
-            include_payload=True,
-            include_vectors=False,
+            with_payload=True,
+            with_vectors=False,
             limit=10000,
         )
     except Exception:
