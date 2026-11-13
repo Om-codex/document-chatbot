@@ -15,7 +15,7 @@ from services.exceptions import (
     RetrievalError,
 )
 from utils.validation import is_valid_doc_id
-from vectorstore.chroma_store import get_all_documents
+from vectorstore.qdrant_store import get_all_documents
 
 logger = logging.getLogger(__name__)
 
