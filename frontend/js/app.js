@@ -169,6 +169,19 @@ function scrollToBottom() {
   dom.chatLog.scrollTo({ top: dom.chatLog.scrollHeight, behavior: reduced ? "auto" : "smooth" });
 }
 
+/**
+ * Render markdown text as sanitized HTML for assistant answers.
+ * Uses marked.js for parsing and DOMPurify for XSS sanitization.
+ * Falls back to plain text if either library is unavailable.
+ */
+function renderMarkdown(text) {
+  if (typeof marked === "undefined" || typeof DOMPurify === "undefined") {
+    return text || "";
+  }
+  const html = marked.parse(text || "");
+  return DOMPurify.sanitize(html);
+}
+
 function announce(message) {
   dom.announcer.textContent = "";
   setTimeout(() => {
@@ -817,7 +830,13 @@ function buildMessage(message) {
     line.append(typing, label);
     body.append(line);
   } else {
-    body.append(el("p", "message-text", message.content));
+    const messageText = el("p", "message-text");
+    if (message.role === "assistant" && !message.error) {
+      messageText.innerHTML = renderMarkdown(message.content);
+    } else {
+      messageText.textContent = message.content;
+    }
+    body.append(messageText);
 
     if (message.error) {
       if (message.code) {
