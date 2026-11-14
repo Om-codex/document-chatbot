@@ -231,6 +231,36 @@ function renderHealthError(error) {
   dom.healthPill.title = errorText(error);
 }
 
+/**
+ * Show "Backend starting…" while Render spins up the service.
+ */
+function renderHealthStarting() {
+  dom.healthPill.className = "pill pill--pending";
+  dom.healthPill.textContent = "Backend starting…";
+  dom.healthPill.title = "Waiting for the backend to become available…";
+}
+
+/**
+ * Retry the health check every ``intervalMs`` for up to ``maxWaitMs``.
+ * Resolves with the health response on success, or rejects with the last error.
+ */
+async function waitForHealth(maxWaitMs, intervalMs) {
+  const start = Date.now();
+  let lastError;
+
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      return await api.health();
+    } catch (error) {
+      lastError = error;
+      renderHealthStarting();
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+
+  throw lastError || new Error("Backend not reachable");
+}
+
 /* ----------------------------------------------------------------- banner */
 
 function setBanner(message) {
@@ -291,27 +321,39 @@ async function refreshDocuments({ addIds = [], silent = false } = {}) {
 }
 
 async function loadInitial() {
-  const [healthResult, docsResult] = await Promise.allSettled([api.health(), api.listDocuments()]);
-
-  if (healthResult.status === "fulfilled") {
-    state.health = healthResult.value;
-    renderHealth();
-  } else {
-    renderHealthError(healthResult.reason);
-    setBanner(errorText(healthResult.reason));
+  // Retry health check for up to 3 minutes while Render spins up the service.
+  renderHealthStarting();
+  let healthResult;
+  try {
+    healthResult = await waitForHealth(180_000, 5_000);
+  } catch (error) {
+    renderHealthError(error);
+    setBanner(errorText(error));
+    state.loaded = true;
+    renderLibraryError(errorText(error));
+    updateScopeUI();
+    updateComposer();
+    return;
   }
 
-  if (docsResult.status === "fulfilled") {
-    state.documents = Array.isArray(docsResult.value && docsResult.value.documents)
-      ? docsResult.value.documents
+  state.health = healthResult;
+  renderHealth();
+
+  try {
+    const docsResult = await api.listDocuments();
+    state.documents = Array.isArray(docsResult && docsResult.documents)
+      ? docsResult.documents
       : [];
     state.loaded = true;
     normalizeSelection();
     renderLibrary();
-  } else {
-    state.loaded = true;
-    renderLibraryError(errorText(docsResult.reason));
-    if (healthResult.status === "fulfilled") setBanner(errorText(docsResult.reason));
+  } catch (error) {
+    if (!state.loaded) {
+      state.loaded = true;
+      renderLibraryError(errorText(error));
+      updateScopeUI();
+      updateComposer();
+    }
   }
 
   updateScopeUI();
