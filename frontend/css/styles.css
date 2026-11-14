@@ -1689,45 +1689,84 @@ button:disabled {
 
 /* ------------------------------------------------------------------- fullscreen */
 
+body.chat-fullscreen-body {
+  overflow: hidden;
+  margin: 0;
+}
+
 .chat--fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  width: 100vw;
-  height: 100vh;
-  max-width: none;
-  max-height: none;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: var(--surface);
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 100 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .chat--fullscreen .workspace {
-  grid-template-columns: 1fr;
-  height: 100vh;
-  gap: 0;
+  grid-template-columns: 1fr !important;
+  height: 100vh !important;
+  gap: 0 !important;
+  display: grid !important;
 }
 
 .chat--fullscreen .sidebar {
-  display: none;
+  display: none !important;
 }
 
 .chat--fullscreen .chat-head {
-  padding: 12px 16px;
-  background: var(--surface);
+  padding: 12px 16px !important;
+  background: var(--surface) !important;
+  flex-shrink: 0 !important;
 }
 
 .chat--fullscreen .chat-log {
-  padding: 20px;
-  height: auto;
+  padding: 20px !important;
+  height: auto !important;
+  flex: 1 !important;
+  overflow-y: auto !important;
+  display: block !important;
 }
 
 .chat--fullscreen .composer {
-  padding: 12px 16px;
-  background: var(--surface-2);
+  padding: 12px 16px !important;
+  background: var(--surface-2) !important;
+  flex-shrink: 0 !important;
 }
 
 .chat--fullscreen .message {
-  max-width: 90vw;
+  max-width: 90vw !important;
+}
+
+.chat--fullscreen .doc-row {
+  max-width: none !important;
+}
+
+#toggle-fullscreen {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  padding: 6px !important;
+}
+
+#toggle-fullscreen svg {
+  width: 20px !important;
+  height: 20px !important;
+  stroke-width: 2 !important;
+}
+
+.chat-head #toggle-fullscreen {
+  margin-left: 8px !important;
 }
