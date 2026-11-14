@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     # -------------------------------------
 
     # Timeout for outbound HTTP requests to Qdrant, Groq, and Gemini APIs.
-    http_request_timeout_seconds: float = 120.0
+    http_request_timeout_seconds: float = 500.0
 
     # -------------------------------------
     # Text Splitting Configuration
