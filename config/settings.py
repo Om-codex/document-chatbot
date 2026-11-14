@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     gemini_embedding_model: str = "gemini-embedding-2"
     embedding_dimensions: int = 768
-    embedding_batch_size: int = 50
+    embedding_batch_size: int = 100
     embedding_max_retries: int = 6
     embedding_initial_backoff_seconds: float = 3.0
 
@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     # -------------------------------------
 
     # Timeout for outbound HTTP requests to Qdrant, Groq, and Gemini APIs.
-    http_request_timeout_seconds: float = 30.0
+    http_request_timeout_seconds: float = 120.0
 
     # -------------------------------------
     # Text Splitting Configuration
