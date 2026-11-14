@@ -1765,6 +1765,7 @@ body.chat-fullscreen-body {
   width: 20px !important;
   height: 20px !important;
   stroke-width: 2 !important;
+  pointer-events: none !important;
 }
 
 .chat-head #toggle-fullscreen {
