@@ -44,7 +44,7 @@ const dom = {
   topK: document.getElementById("top-k"),
   clearChat: document.getElementById("clear-chat"),
   toggleFullscreen: document.getElementById("toggle-fullscreen"),
-  chatEl: document.querySelector(".chat"),
+  chatEl: document.querySelector("main.chat"),
 
   banner: document.getElementById("banner"),
   bannerText: document.getElementById("banner-text"),
@@ -154,14 +154,17 @@ function storeFullscreen(value) {
 }
 
 function setFullscreen(fullscreen) {
+  if (!dom.chatEl) return;
   state.isFullscreen = fullscreen;
   storeFullscreen(fullscreen);
   if (fullscreen) {
     dom.chatEl.classList.add("chat--fullscreen");
+    document.body.classList.add("chat-fullscreen-body");
     dom.toggleFullscreen.setAttribute("aria-label", "Exit fullscreen");
     dom.toggleFullscreen.title = "Exit fullscreen";
   } else {
     dom.chatEl.classList.remove("chat--fullscreen");
+    document.body.classList.remove("chat-fullscreen-body");
     dom.toggleFullscreen.setAttribute("aria-label", "Toggle fullscreen");
     dom.toggleFullscreen.title = "Toggle fullscreen";
   }
@@ -1166,7 +1169,9 @@ function bindEvents() {
   dom.pasteBtn.addEventListener("click", openTextDialog);
   dom.refreshDocs.addEventListener("click", manualRefresh);
   dom.clearChat.addEventListener("click", clearChat);
-  dom.toggleFullscreen.addEventListener("click", () => setFullscreen(!state.isFullscreen));
+  if (dom.toggleFullscreen) {
+    dom.toggleFullscreen.addEventListener("click", () => setFullscreen(!state.isFullscreen));
+  }
 
   dom.dropzone.addEventListener("click", openPicker);
   dom.dropzone.addEventListener("keydown", (event) => {
@@ -1269,7 +1274,7 @@ async function init() {
   renderMode();
   dom.topK.value = String(state.topK);
   bindEvents();
-  if (state.isFullscreen) {
+  if (state.isFullscreen && dom.chatEl) {
     dom.chatEl.classList.add("chat--fullscreen");
   }
   renderEmptyChat({ replace: true });
