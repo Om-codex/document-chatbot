@@ -9,7 +9,7 @@ from ingestion.exceptions import (
     EmptyDocumentError as IngestionEmptyDocumentError,
     UnsupportedDocumentFormatError,
 )
-from ingestion.pipeline import ingest_document
+from ingestion.pipeline import generate_document_id, ingest_document
 from services.exceptions import (
     DocumentDeletionError,
     DocumentNotFoundError,
@@ -139,6 +139,36 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
             extension,
         )
 
+        # Compute document ID from file contents before ingestion.
+        # If the document already exists in Qdrant, skip ingestion and
+        # embedding entirely -- this saves Gemini API calls on re-uploads
+        # and after rate-limit resets.
+        doc_id = generate_document_id(str(file_path))
+        existed_before = document_exists(doc_id)
+
+        if existed_before:
+            logger.info(
+                "Document already indexed, skipping ingestion: filename=%s doc_id=%s",
+                original_filename,
+                doc_id[:12],
+            )
+
+            # Clean up the temporary file -- Qdrant already has the durable copy.
+            try:
+                file_path.unlink()
+                temp_dir.rmdir()
+            except OSError:
+                logger.exception("Failed to remove temporary file: %s", file_path.name)
+
+            return {
+                "message": "Document already indexed.",
+                "filename": original_filename,
+                "doc_id": doc_id,
+                "total_chunks": count_document_chunks(doc_id),
+                "file_size_bytes": total_size,
+                "duplicate": True,
+            }
+
         try:
             chunks = ingest_document(str(file_path))
         except UnsupportedDocumentFormatError as exc:
@@ -151,8 +181,11 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
         if not chunks:
             raise EmptyDocumentError("No text could be extracted from the document.")
 
-        doc_id = chunks[0].metadata["doc_id"]
-        existed_before = document_exists(doc_id)
+        # Verify the ingested chunks match the pre-computed doc_id.
+        if chunks[0].metadata.get("doc_id") != doc_id:
+            raise ValueError("Ingested document ID does not match pre-computed ID.")
+
+        existed_before = False  # Already confirmed it does not exist above.
 
         logger.info(
             "Document loaded: filename=%s doc_id=%s chunks=%d replacement=%s",
