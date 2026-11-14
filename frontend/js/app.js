@@ -22,6 +22,7 @@ const dom = {
   uploadBtn: document.getElementById("upload-btn"),
   pasteBtn: document.getElementById("paste-btn"),
   uploadProgress: document.getElementById("upload-progress"),
+  uploadSpinner: document.getElementById("upload-spinner"),
   progressBar: document.getElementById("progress-bar"),
   progressPercent: document.getElementById("progress-percent"),
   progressLabel: document.getElementById("progress-label"),
@@ -584,6 +585,7 @@ async function uploadFiles(files, initialProblems = []) {
   setBanner(null);
   renderFeedback([]);
   dom.uploadBtn.disabled = true;
+  dom.uploadSpinner.hidden = false;
   updateComposer();
 
   // The backend accepts one file per request, so upload sequentially. This also
@@ -646,6 +648,7 @@ async function uploadFiles(files, initialProblems = []) {
   } finally {
     state.uploading = false;
     dom.uploadBtn.disabled = false;
+    dom.uploadSpinner.hidden = true;
     hideProgress(600);
     updateComposer();
   }
