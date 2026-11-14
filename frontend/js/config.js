@@ -41,4 +41,5 @@ export const CONFIG = {
   maxTopK: 20,
   defaultTopK: 3,
   topKStorageKey: "document-chatbot.topK",
+  fullscreenStorageKey: "document-chatbot.fullscreen",
 };
