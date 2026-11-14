@@ -46,6 +46,7 @@ class GeminiEmbedding(Embeddings):
         normalize: bool | None = None,
         max_retries: int | None = None,
         initial_backoff_seconds: float | None = None,
+        rate_limit_delay_seconds: float | None = None,
     ) -> None:
         self.api_key = api_key or settings.gemini_api_key
         if not self.api_key:
@@ -72,17 +73,23 @@ class GeminiEmbedding(Embeddings):
             if initial_backoff_seconds is not None
             else settings.embedding_initial_backoff_seconds
         )
+        self.embedding_rate_limit_delay_seconds = (
+            rate_limit_delay_seconds
+            if rate_limit_delay_seconds is not None
+            else settings.embedding_rate_limit_delay_seconds
+        )
 
         self._client = genai.Client(api_key=api_key_value)
 
         logger.info(
             "GeminiEmbedding initialized: model=%s dimensions=%d batch_size=%d "
-            "normalize=%s max_retries=%d",
+            "normalize=%s max_retries=%d rate_limit_delay=%.1fs",
             self.model,
             self.dimensions,
             self.batch_size,
             self.normalize,
             self.max_retries,
+            self.embedding_rate_limit_delay_seconds,
         )
 
     # ------------------------------------------------------------------
@@ -106,6 +113,16 @@ class GeminiEmbedding(Embeddings):
             batch = texts[start : start + self.batch_size]
             batch_embeddings = self._embed_batch(batch, task_type="RETRIEVAL_DOCUMENT")
             all_embeddings.extend(batch_embeddings)
+
+            # Rate-limit: wait between batches to avoid exceeding the
+            # Gemini Embedding free tier limit (100 requests/minute).
+            # Sleep only if there are more batches to process.
+            if start + self.batch_size < len(texts):
+                logger.debug(
+                    "Rate limit: sleeping %ds before next embedding batch",
+                    self.embedding_rate_limit_delay_seconds,
+                )
+                time.sleep(self.embedding_rate_limit_delay_seconds)
 
         return all_embeddings
 

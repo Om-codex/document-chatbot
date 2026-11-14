@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 100
     embedding_max_retries: int = 6
     embedding_initial_backoff_seconds: float = 3.0
+    embedding_rate_limit_delay_seconds: float = 60.0
 
     # Normalize embeddings (L2) after retrieval from the API.
     normalize_embeddings: bool = True
