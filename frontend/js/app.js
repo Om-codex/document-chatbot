@@ -44,7 +44,7 @@ const dom = {
   topK: document.getElementById("top-k"),
   clearChat: document.getElementById("clear-chat"),
   toggleFullscreen: document.getElementById("toggle-fullscreen"),
-  chatEl: document.querySelector("main.chat"),
+  chatEl: null,
 
   banner: document.getElementById("banner"),
   bannerText: document.getElementById("banner-text"),
@@ -154,21 +154,25 @@ function storeFullscreen(value) {
 }
 
 function setFullscreen(fullscreen) {
-  if (!dom.chatEl) return;
-  state.isFullscreen = fullscreen;
-  storeFullscreen(fullscreen);
-  if (fullscreen) {
-    dom.chatEl.classList.add("chat--fullscreen");
-    document.body.classList.add("chat-fullscreen-body");
-    dom.toggleFullscreen.setAttribute("aria-label", "Exit fullscreen");
-    dom.toggleFullscreen.title = "Exit fullscreen";
-  } else {
-    dom.chatEl.classList.remove("chat--fullscreen");
-    document.body.classList.remove("chat-fullscreen-body");
-    dom.toggleFullscreen.setAttribute("aria-label", "Toggle fullscreen");
-    dom.toggleFullscreen.title = "Toggle fullscreen";
+  try {
+    if (!dom.chatEl) return;
+    state.isFullscreen = fullscreen;
+    storeFullscreen(fullscreen);
+    if (fullscreen) {
+      dom.chatEl.classList.add("chat--fullscreen");
+      document.body.classList.add("chat-fullscreen-body");
+      dom.toggleFullscreen.setAttribute("aria-label", "Exit fullscreen");
+      dom.toggleFullscreen.title = "Exit fullscreen";
+    } else {
+      dom.chatEl.classList.remove("chat--fullscreen");
+      document.body.classList.remove("chat-fullscreen-body");
+      dom.toggleFullscreen.setAttribute("aria-label", "Toggle fullscreen");
+      dom.toggleFullscreen.title = "Toggle fullscreen";
+    }
+    updateComposer();
+  } catch (err) {
+    console.error("setFullscreen error:", err);
   }
-  updateComposer();
 }
 
 function applyTopKFromInput({ commit = false } = {}) {
@@ -1274,6 +1278,7 @@ async function init() {
   renderMode();
   dom.topK.value = String(state.topK);
   bindEvents();
+  dom.chatEl = document.querySelector("main.chat");
   if (state.isFullscreen && dom.chatEl) {
     dom.chatEl.classList.add("chat--fullscreen");
   }
