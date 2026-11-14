@@ -43,6 +43,8 @@ const dom = {
   composerHint: document.getElementById("composer-hint"),
   topK: document.getElementById("top-k"),
   clearChat: document.getElementById("clear-chat"),
+  toggleFullscreen: document.getElementById("toggle-fullscreen"),
+  chatEl: document.querySelector(".chat"),
 
   banner: document.getElementById("banner"),
   bannerText: document.getElementById("banner-text"),
@@ -79,6 +81,7 @@ const state = {
   loaded: false,
   health: null,
   topK: readStoredTopK(),
+  isFullscreen: readStoredFullscreen(),
 };
 
 let progressHideTimer = null;
@@ -132,6 +135,37 @@ function storeTopK(value) {
     // Storage can be unavailable (private mode / blocked cookies). The value
     // still applies to the current session.
   }
+}
+
+function readStoredFullscreen() {
+  try {
+    return window.localStorage.getItem(CONFIG.fullscreenStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function storeFullscreen(value) {
+  try {
+    window.localStorage.setItem(CONFIG.fullscreenStorageKey, String(value));
+  } catch {
+    // Storage can be unavailable (private mode / blocked cookies).
+  }
+}
+
+function setFullscreen(fullscreen) {
+  state.isFullscreen = fullscreen;
+  storeFullscreen(fullscreen);
+  if (fullscreen) {
+    dom.chatEl.classList.add("chat--fullscreen");
+    dom.toggleFullscreen.setAttribute("aria-label", "Exit fullscreen");
+    dom.toggleFullscreen.title = "Exit fullscreen";
+  } else {
+    dom.chatEl.classList.remove("chat--fullscreen");
+    dom.toggleFullscreen.setAttribute("aria-label", "Toggle fullscreen");
+    dom.toggleFullscreen.title = "Toggle fullscreen";
+  }
+  updateComposer();
 }
 
 function applyTopKFromInput({ commit = false } = {}) {
@@ -1132,6 +1166,7 @@ function bindEvents() {
   dom.pasteBtn.addEventListener("click", openTextDialog);
   dom.refreshDocs.addEventListener("click", manualRefresh);
   dom.clearChat.addEventListener("click", clearChat);
+  dom.toggleFullscreen.addEventListener("click", () => setFullscreen(!state.isFullscreen));
 
   dom.dropzone.addEventListener("click", openPicker);
   dom.dropzone.addEventListener("keydown", (event) => {
@@ -1234,6 +1269,9 @@ async function init() {
   renderMode();
   dom.topK.value = String(state.topK);
   bindEvents();
+  if (state.isFullscreen) {
+    dom.chatEl.classList.add("chat--fullscreen");
+  }
   renderEmptyChat({ replace: true });
   updateScopeUI();
   updateComposer();
