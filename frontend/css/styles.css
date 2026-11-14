@@ -1670,9 +1670,11 @@ button:disabled {
   width: 40px;
   height: 40px;
   border: 3px solid var(--border-strong);
-  border-top-color: var(--accent);
+  border-top-color: var(--accent-strong);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+  will-change: transform;
 }
 
 .spinner-text {
@@ -1681,5 +1683,6 @@ button:disabled {
 }
 
 @keyframes spin {
+  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
