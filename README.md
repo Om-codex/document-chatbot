@@ -5,7 +5,6 @@ FastAPI RAG service deployed on Render; the frontend is plain HTML/CSS/JS hosted
 on Cloudflare Workers.
 
 - Live frontend: https://document-chatbot.omm512462.workers.dev/
-- Live backend: https://document-chatbot-urue.onrender.com/
 - Architecture and endpoint reference: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md)
 - Engineering decisions: [`docs/DECISIONS.md`](docs/DECISIONS.md)
 
