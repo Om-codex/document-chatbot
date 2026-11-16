@@ -118,8 +118,7 @@ export const ragTour = {
         "The chunk text is sent to the Gemini Embedding API. Vectors are normalized and sent to Qdrant Cloud.",
       why:
         "Running embeddings locally means ingestion has no per-chunk API cost and does not depend on a second provider key. Only chat generation calls an external service.",
-      tech:
-        "tech: \"Qdrant Cloud\","
+        tech: "Qdrant Cloud",
       input: "Chunk text.",
       output: "One 768-dimension vector per chunk.",
       next:
