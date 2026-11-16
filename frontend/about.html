@@ -73,9 +73,9 @@
         <div class="about-facts">
           <span class="about-fact">FastAPI + Uvicorn</span>
           <span class="about-fact">LangChain 1.x (LCEL)</span>
-          <span class="about-fact">ChromaDB, persistent</span>
+          <span class="about-fact">Qdrant Cloud</span>
           <span class="about-fact">Groq openai/gpt-oss-20b</span>
-          <span class="about-fact">MiniLM embeddings, local CPU</span>
+          <span class="about-fact">Gemini embeddings (768-dim)</span>
           <span class="about-fact">No frontend build step</span>
         </div>
       </div>
@@ -108,7 +108,7 @@
             The design stance is simple: answer from the provided context, show the
             passages, fail with a readable message, and never present an unverified
             capability as a feature. Chat generation uses an external API; embeddings and
-            the vector library run locally.
+            the vector library run via hosted APIs.
           </p>
           <p class="pull-quote">
             Grounded does not mean guaranteed. The system is designed to make its evidence
@@ -156,9 +156,9 @@
                 <span class="arch-arrow" aria-hidden="true">→</span>
                 <button class="arch-node" type="button" data-node="splitter" aria-pressed="false">Splitter</button>
                 <span class="arch-arrow" aria-hidden="true">→</span>
-                <button class="arch-node" type="button" data-node="embeddings" aria-pressed="false">Embeddings</button>
+                <button class="arch-node" type="button" data-node="embeddings" aria-pressed="false">Gemini Embeddings</button>
                 <span class="arch-arrow" aria-hidden="true">→</span>
-                <button class="arch-node" type="button" data-node="chroma" aria-pressed="false">ChromaDB</button>
+                <button class="arch-node" type="button" data-node="qdrant" aria-pressed="false">Qdrant Cloud</button>
               </div>
             </div>
 
@@ -178,8 +178,8 @@
             <div class="arch-lane">
               <p class="arch-lane__title"><span>5</span>Storage and configuration</p>
               <div class="arch-flow">
-                <button class="arch-node" type="button" data-node="uploads" aria-pressed="false">data/uploads</button>
-                <button class="arch-node" type="button" data-node="chromadb" aria-pressed="false">data/chroma_db</button>
+                <button class="arch-node" type="button" data-node="uploads" aria-pressed="false">Temporary uploads</button>
+                <button class="arch-node" type="button" data-node="qdrant" aria-pressed="false">Qdrant Cloud</button>
                 <button class="arch-node" type="button" data-node="settings" aria-pressed="false">config/settings.py</button>
               </div>
             </div>
@@ -230,13 +230,13 @@
           </article>
           <article class="module-card" data-reveal>
             <code>embeddings/</code>
-            <h3>Local vectors</h3>
-            <p>Loads <code>sentence-transformers/all-MiniLM-L6-v2</code> once per process, on CPU, with normalized embeddings.</p>
+            <h3>Embedding API</h3>
+            <p>Calls Google Gemini <code>gemini-embedding-2</code> to produce 768-dimensional vectors. Loaded once per process, with normalized output and batched requests.</p>
           </article>
           <article class="module-card" data-reveal>
-            <code>vectorstore/</code>
-            <h3>Persistent storage</h3>
-            <p>Owns the Chroma collection: upserting chunks, pruning stale IDs, listing documents, counting chunks and deleting by <code>doc_id</code>.</p>
+            <code>vectorstore/qdrant_store.py</code>
+            <h3>Vector store</h3>
+            <p>Owns the Qdrant Cloud collection: upserting chunks, pruning stale IDs, listing documents, counting chunks and deleting by <code>doc_id</code>.</p>
           </article>
           <article class="module-card" data-reveal>
             <code>retrieval/</code>
@@ -273,10 +273,10 @@
 
         <div class="decision-list" data-reveal>
           <details class="decision">
-            <summary><span class="decision__tag decision__tag--design">ADR-1</span> Groq for chat, local embeddings</summary>
+            <summary><span class="decision__tag decision__tag--design">ADR-1</span> Groq for chat, Gemini Embedding API</summary>
             <div class="decision__body">
-              <p>Chat generation uses Groq's <code>openai/gpt-oss-20b</code> at temperature 0. Embeddings use a local sentence-transformers model. This keeps ingestion free of a second API key and per-chunk cost, while keeping generation fast and inexpensive.</p>
-              <p>The consequence is a split dependency: retrieval works locally, but a final answer still requires network access to Groq and is subject to its free-tier limits.</p>
+              <p>Chat generation uses Groq's <code>openai/gpt-oss-20b</code> at temperature 0. Embeddings use Google's <code>gemini-embedding-2</code> via the Gemini Embedding API. This keeps ingestion free of local model downloads while keeping generation fast and inexpensive.</p>
+              <p>The consequence is a network dependency for both chat and embeddings, subject to provider rate limits and availability.</p>
             </div>
           </details>
 
@@ -290,7 +290,7 @@
           <details class="decision">
             <summary><span class="decision__tag decision__tag--design">ADR-3</span> Normalized embeddings, no exposed score</summary>
             <div class="decision__body">
-              <p>Vectors are normalized and Chroma uses its default L2 index. The API returns the retrieved passages and metadata, but not a similarity score. Exposing a raw distance without documenting the metric would invite comparisons that do not mean what they appear to mean.</p>
+              <p>Vectors are normalized and Qdrant uses Cosine distance. The API returns the retrieved passages and metadata, but not a similarity score. Exposing a raw distance without documenting the metric would invite comparisons that do not mean what they appear to mean.</p>
             </div>
           </details>
 
@@ -310,10 +310,10 @@
           </details>
 
           <details class="decision">
-            <summary><span class="decision__tag decision__tag--design">ADR-6</span> Persistent Chroma, one worker in development</summary>
+            <summary><span class="decision__tag decision__tag--design">ADR-6</span> Qdrant Cloud for vectors</summary>
             <div class="decision__body">
-              <p>Chroma runs in persistent local mode under <code>data/chroma_db</code>. The embedding model, vector store and LLM client are cached per process, so local development uses a single Uvicorn worker.</p>
-              <p>Scaling to multiple workers would mean each process loads its own model and opens its own client; that is a deployment concern this local project does not pretend to solve.</p>
+              <p>Vectors live in Qdrant Cloud with Cosine distance. This keeps the backend footprint small enough for free-tier hosts and makes vectors durable across redeployments.</p>
+              <p>Scaling beyond a single collection would mean creating additional Qdrant collections; that is a deployment concern this project addresses with a fresh collection per embedding model.</p>
             </div>
           </details>
 
@@ -332,9 +332,9 @@
           </details>
 
           <details class="decision">
-            <summary><span class="decision__tag decision__tag--design">ADR-9</span> Same-origin static frontend</summary>
+            <summary><span class="decision__tag decision__tag--design">ADR-9</span> Cloudflare Workers frontend, Render backend</summary>
             <div class="decision__body">
-              <p>FastAPI serves the frontend from the same process at <code>/app</code>, so there is no separate frontend server and no CORS requirement by default. The UI is plain HTML, CSS and JavaScript with no build step.</p>
+              <p>The static frontend is served from Cloudflare Workers, while the FastAPI backend runs on Render. The frontend connects to the backend over CORS with an explicit allow-listed origin. The UI is plain HTML, CSS and JavaScript with no build step.</p>
             </div>
           </details>
 
@@ -358,7 +358,7 @@
 
         <ul class="check-list" data-reveal>
           <li>PDF, TXT and DOCX ingestion, plus a paste-text dialog that uses the same pipeline.</li>
-          <li>Local 384-dimension embeddings with a persistent Chroma vector library.</li>
+          <li>Google Gemini Embedding API with <code>gemini-embedding-2</code>, 768-dimensional vectors.</li>
           <li>Grounded prompting with an explicit instruction to admit when the context does not contain the answer.</li>
           <li>Source citations with filename, chunk index and page metadata when available.</li>
           <li>Document-scoped retrieval and a configurable top-k between 1 and 20.</li>
@@ -381,10 +381,9 @@
         <div class="tech-grid">
           <div class="tech-card" data-reveal><span class="tech-icon">API</span><span><strong>FastAPI 0.162</strong><span>Typed routes, validation, static hosting</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">LC</span><span><strong>LangChain 1.x</strong><span>Loaders, splitter, retriever, LCEL chain</span></span></div>
-          <div class="tech-card" data-reveal><span class="tech-icon">CH</span><span><strong>ChromaDB 1.5</strong><span>Persistent local vector collection</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">QD</span><span><strong>Qdrant Cloud</strong><span>Cloud vector collection, 768-dim</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">GQ</span><span><strong>Groq + gpt-oss-20b</strong><span>Chat generation, temperature 0</span></span></div>
-          <div class="tech-card" data-reveal><span class="tech-icon">HF</span><span><strong>sentence-transformers</strong><span>all-MiniLM-L6-v2, 384-dim, CPU</span></span></div>
-          <div class="tech-card" data-reveal><span class="tech-icon">PY</span><span><strong>pypdf + docx2txt</strong><span>PDF and Word text extraction</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">GE</span><span><strong>Google Gemini</strong><span>gemini-embedding-2, 768-dim API</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">PD</span><span><strong>Pydantic Settings</strong><span>Environment-driven configuration</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">JS</span><span><strong>Vanilla HTML/CSS/JS</strong><span>No framework, no build step</span></span></div>
         </div>
@@ -444,7 +443,7 @@
           <div class="credit-avatar" aria-hidden="true">OC</div>
           <div>
             <h3>Om-codex</h3>
-            <p>Design, backend, frontend and documentation. Built as a complete RAG engineering project with FastAPI, LangChain, ChromaDB, sentence-transformers and Groq.</p>
+            <p>Design, backend, frontend and documentation. Built as a complete RAG engineering project with FastAPI, LangChain, Qdrant Cloud, Groq and Google Gemini.</p>
             <div class="credit-links">
               <a class="btn btn--secondary btn--sm" href="https://github.com/Om-codex" target="_blank" rel="noopener noreferrer">GitHub profile</a>
               <a class="btn btn--secondary btn--sm" href="tour.html?tour=rag">Replay the engine tour</a>
@@ -453,7 +452,7 @@
           </div>
         </div>
 
-        <p class="tech-note">Model and library credits belong to their respective projects: LangChain, Chroma, Hugging Face sentence-transformers, Groq and FastAPI.</p>
+        <p class="tech-note">Model and library credits belong to their respective projects: LangChain, Qdrant Cloud, FastAPI, Groq and Google Gemini.</p>
       </div>
     </section>
   </main>
@@ -488,7 +487,7 @@
       </div>
 
       <div class="footer-bottom">
-        <span>&copy; <span id="year">2026</span> Document Chatbot. Built with LangChain, ChromaDB, FastAPI and Groq.</span>
+        <span>&copy; <span id="year">2026</span> Document Chatbot. Built with LangChain, Qdrant Cloud, FastAPI, Groq and Google Gemini.</span>
         <span>Answers are grounded in your files. Verify important details against the source.</span>
       </div>
     </div>

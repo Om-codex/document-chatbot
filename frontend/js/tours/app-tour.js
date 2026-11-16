@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tour B — Your Guide to Using the Document Chatbot.
  *
  * This tour describes the real interface in `chat.html` and the behaviour
@@ -76,7 +76,7 @@ export const appTour = {
       tech:
         "Left sidebar, below the upload panel. Each row has a checkbox, a filename, a page/chunk summary and a delete button.",
       input: "Selection changes or a delete confirmation.",
-      output: "An updated selection, or a document removed from Chroma and from disk.",
+      output: "An updated selection, or a document removed from Qdrant Cloud and the library.",
       next:
         "Your selection controls what the next question searches.",
     },

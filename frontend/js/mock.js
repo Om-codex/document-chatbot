@@ -128,7 +128,7 @@ function pickChunks(docs, topK) {
         chunk_id: `${doc.doc_id}_${index}`,
         content:
           `Mock passage ${index + 1} from “${doc.filename}”. ` +
-          "Real chunks retrieved from ChromaDB appear here when the backend is running.",
+          "Real chunks retrieved from Qdrant Cloud appear here when the backend is running.",
         metadata: {
           doc_id: doc.doc_id,
           filename: doc.filename,
@@ -156,7 +156,7 @@ export function createMockApi() {
         app_name: "Document Chatbot API (mock)",
         app_version: "1.0.0",
         llm_model: "mock / openai/gpt-oss-20b",
-        embedding_model: "mock / all-MiniLM-L6-v2",
+        embedding_model: "mock / gemini-embedding-2",
         collection: "mock_collection",
         document_count: documents.length,
       };

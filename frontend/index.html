@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="A retrieval-augmented generation document assistant built with LangChain, ChromaDB, FastAPI and Groq. Ask grounded questions about your own PDF, TXT and DOCX files." />
+  <meta name="description" content="Retrieval-augmented generation document assistant. Upload PDF, TXT or DOCX files and ask grounded questions with cited sources. FastAPI backend, Qdrant Cloud vectors, Google Gemini embeddings and Groq chat." />
   <title>Document Chatbot — Chat with your documents</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/site.css?v=1" />
@@ -63,12 +63,13 @@
     <section class="hero">
       <div class="container hero__grid">
         <div>
-          <span class="eyebrow">Retrieval-augmented generation, end to end</span>
-          <h1>Chat with Your Documents. <span class="grad">Understand What&rsquo;s Inside.</span></h1>
+          <span class="eyebrow">Grounded RAG answers from your files</span>
+          <h1>Chat with Your Documents. <span class="grad">See Where the Answer Came From.</span></h1>
           <p class="hero__lede">
             Upload a PDF, Word file or plain text, then ask questions in your own words.
-            Every answer is generated from retrieved passages in your files &mdash; and shown
-            with the sources it came from.
+            Every answer is generated from retrieved passages in your files and shown with
+            the sources it came from — backed by Qdrant Cloud vectors, Google Gemini
+            embeddings and Groq chat.
           </p>
 
           <div class="hero__actions">
@@ -91,13 +92,13 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="m4 7 8-4 8 4-8 4-8-4Z" /><path d="m4 12 8 4 8-4" /><path d="m4 17 8 4 8-4" />
               </svg>
-              Built with LangChain &middot; ChromaDB &middot; FastAPI &middot; Groq
+              Built with FastAPI &middot; LangChain &middot; Qdrant Cloud &middot; Groq
             </span>
             <span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
               </svg>
-              Embeddings run locally
+              Google Gemini embeddings (768-dim)
             </span>
           </p>
         </div>
@@ -209,8 +210,8 @@
                 <rect x="3" y="4" width="18" height="6" rx="2" /><rect x="3" y="14" width="18" height="6" rx="2" /><path d="M7 7h.01M7 17h.01" />
               </svg>
             </div>
-            <h3>Local embeddings</h3>
-            <p>Chunks are embedded on your machine with <code>all-MiniLM-L6-v2</code> (384 dimensions). No embedding API key, no per-chunk cost.</p>
+            <h3>Google Gemini embeddings</h3>
+            <p>Chunks are embedded via the Google Gemini Embedding API (<code>gemini-embedding-2</code>, 768 dimensions).</p>
           </article>
 
           <article class="feature-card" data-reveal>
@@ -240,7 +241,7 @@
               </svg>
             </div>
             <h3>A library that survives restarts</h3>
-            <p>ChromaDB persists vectors to local disk. Content-based SHA-256 IDs make re-uploading the same file safe rather than duplicated.</p>
+            <p>Vectors live in Qdrant Cloud. Content-based SHA-256 IDs make re-uploading the same file safe rather than duplicated.</p>
           </article>
         </div>
       </div>
@@ -274,12 +275,12 @@
           <div class="pipeline-step">
             <span class="pipeline-num">4</span>
             <strong>Embeddings</strong>
-            <span>MiniLM, 384-dim</span>
+            <span>Gemini, 768-dim</span>
           </div>
           <div class="pipeline-step">
             <span class="pipeline-num">5</span>
-            <strong>ChromaDB</strong>
-            <span>Persisted vectors</span>
+            <strong>Qdrant Cloud</strong>
+            <span>Persistent vectors</span>
           </div>
           <div class="pipeline-step">
             <span class="pipeline-num">6</span>
@@ -341,7 +342,7 @@
                 <ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
               </svg>
             </span>
-            <span><strong>ChromaDB</strong><span>Local persistent vector collection</span></span>
+            <span><strong>Qdrant Cloud</strong><span>Persistent vector collection (768-dim)</span></span>
           </div>
           <div class="tech-card" data-reveal>
             <span class="tech-icon">
@@ -357,7 +358,7 @@
                 <rect x="3" y="4" width="18" height="6" rx="2" /><rect x="3" y="14" width="18" height="6" rx="2" /><path d="M7 7h.01M7 17h.01" />
               </svg>
             </span>
-            <span><strong>sentence-transformers</strong><span>MiniLM embeddings on CPU</span></span>
+            <span><strong>Google Gemini Embedding API</strong><span>gemini-embedding-2, 768-dim</span></span>
           </div>
           <div class="tech-card" data-reveal>
             <span class="tech-icon">
@@ -385,7 +386,7 @@
           </div>
         </div>
 
-        <p class="tech-note">Chat inference uses the Groq API; document embeddings are computed locally. No API keys are exposed to the browser.</p>
+        <p class="tech-note">Chat generation uses the Groq API; document embeddings come from the Google Gemini Embedding API. No API keys are exposed to the browser.</p>
       </div>
     </section>
 
@@ -439,7 +440,7 @@
       </div>
 
       <div class="footer-bottom">
-        <span>&copy; <span id="year">2026</span> Document Chatbot. Built with LangChain, ChromaDB, FastAPI and Groq.</span>
+        <span>&copy; <span id="year">2026</span> Document Chatbot. Built with LangChain, Qdrant Cloud, FastAPI, Groq and Google Gemini.</span>
         <span>Answers are grounded in your files. Verify important details against the source.</span>
       </div>
     </div>

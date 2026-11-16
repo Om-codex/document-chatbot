@@ -110,36 +110,35 @@ export const ragTour = {
     {
       id: "embeddings",
       kicker: "Stage 5 · Ingestion",
-      title: "Local embeddings turn text into vectors",
+      title: "Google Gemini Embedding API",
       visual: "embeddings",
       summary:
-        "Each chunk is embedded with sentence-transformers/all-MiniLM-L6-v2, producing a 384-dimensional vector on the local CPU.",
+        "Each chunk is embedded via Google Gemini Embedding API (<code>gemini-embedding-2</code>), producing 768-dimensional vectors.",
       what:
-        "The model is loaded once per process and reused. Vectors are normalised before being stored, so similar meanings land close together in the same vector space.",
+        "The chunk text is sent to the Gemini Embedding API. Vectors are normalized and sent to Qdrant Cloud.",
       why:
         "Running embeddings locally means ingestion has no per-chunk API cost and does not depend on a second provider key. Only chat generation calls an external service.",
       tech:
-        "langchain-huggingface HuggingFaceEmbeddings with device=cpu and normalize_embeddings=true.",
+        "tech: \"Qdrant Cloud\","
       input: "Chunk text.",
-      output: "One 384-dimension float vector per chunk.",
+      output: "One 768-dimension vector per chunk.",
       next:
-        "Vectors, text and metadata are written to the persistent Chroma collection.",
+        "Vectors, text and metadata are written to Qdrant Cloud.",
     },
     {
       id: "chroma",
       kicker: "Stage 6 · Ingestion",
-      title: "ChromaDB persists the vector library",
-      visual: "chroma",
+      title: "Qdrant Cloud",
+      visual: "qdrant",
       summary:
-        "Vectors are stored in the document_collection_v2 collection under data/chroma_db, together with the chunk text and metadata.",
+        "Vectors are stored in Qdrant Cloud as the document_collection_v2 collection, together with the chunk text and metadata.",
       what:
-        "Chroma keeps a persistent local collection. Listing documents groups stored chunks by doc_id, and deleting a document removes every vector whose metadata matches that ID.",
+        "Qdrant Cloud keeps vectors in the cloud. Listing documents groups stored chunks by doc_id, and deleting a document removes every vector whose metadata matches that ID.",
       why:
-        "Persistence means the library survives a server restart without re-embedding every file. Metadata filtering is also what makes document-scoped questions possible later.",
-      tech:
-        "ChromaDB in persistent mode via langchain-chroma, configured in config/settings.py.",
+        "Persistence means the library survives a backend restart without re-embedding every file. Metadata filtering is also what makes document-scoped questions possible later.",
+      tech: "Qdrant Cloud",
       input: "Chunk vectors, text and metadata.",
-      output: "A persistent collection that can be queried by similarity or filtered by doc_id.",
+      output: "A cloud vector collection that can be queried by similarity or filtered by doc_id.",
       next:
         "The ingestion path is finished. The next stage starts when a user asks a question.",
     },
@@ -149,17 +148,16 @@ export const ragTour = {
       title: "The question is embedded too",
       visual: "query-embedding",
       summary:
-        "The user's question is embedded with the same MiniLM model that embedded the chunks.",
+        "The user's question is embedded via Google Gemini Embedding API, producing a 768-dimensional query vector.",
       what:
-        "The question text is passed through the same normalisation and model settings. It becomes a query vector in the exact same 384-dimensional space as the stored chunks.",
+        "The question text is sent to the Gemini Embedding API using the same model as ingestion. It becomes a query vector in the same 768-dimensional space as the stored chunks.",
       why:
-        "Similarity only means something if both sides use the same model and preprocessing. Reusing the embedding function guarantees that alignment.",
-      tech:
-        "The same cached HuggingFaceEmbeddings instance used during ingestion.",
+        "Similarity only means something if both sides use the same model and preprocessing. Reusing the same embedding model guarantees alignment.",
+      tech: "Google Gemini Embedding API · Qdrant Cloud",
       input: "The question string from the chat request.",
-      output: "A 384-dimension query vector.",
+      output: "A 768-dimension query vector.",
       next:
-        "Chroma compares that vector against the stored chunk vectors.",
+        "Qdrant compares that vector against the stored chunk vectors.",
     },
     {
       id: "retrieval",
@@ -243,11 +241,11 @@ export const ragTour = {
       summary:
         "Ingestion and question answering are two paths through one modular backend, served alongside a static frontend by the same FastAPI process.",
       what:
-        "Uploads flow through API routes, document service, loaders, splitter, embeddings and Chroma. Questions flow through the chat route, chat service, retriever, prompt, Groq and back as a cited response. Settings and structured errors are shared by both.",
+        "Uploads flow through API routes, document service, loaders, splitter, embeddings and Qdrant Cloud. Questions flow through the chat route, chat service, retriever, prompt, Groq and back as a cited response. Settings and structured errors are shared by both.",
       why:
         "Keeping ingestion, retrieval, generation and transport separate makes each stage testable in isolation. The tour you just took maps one-to-one onto those module boundaries.",
       tech:
-        "FastAPI · LangChain LCEL · ChromaDB · sentence-transformers · Groq · vanilla HTML/CSS/JS.",
+        "FastAPI · LangChain LCEL · Qdrant Cloud · Google Gemini · Groq · vanilla HTML/CSS/JS.",
       input: "Documents and questions.",
       output: "A searchable local library and grounded, source-backed answers.",
       next:

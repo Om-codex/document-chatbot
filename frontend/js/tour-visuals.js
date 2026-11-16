@@ -99,28 +99,28 @@ page_label: "12"</pre>
   },
 
   embeddings() {
-    return `${title("Local embedding")}
+    return `${title("Google Gemini Embedding API")}
       ${node("Chunk text", "up to 1,000 characters")}
       ${arrow()}
-      ${node("sentence-transformers/all-MiniLM-L6-v2", "CPU · normalised", true)}
+      ${node("gemini-embedding-2", "Google Gemini API", true)}
       ${arrow()}
-      <div class="tv-vector" aria-label="Illustration of a 384-dimension vector">
+      <div class="tv-vector" aria-label="Illustration of a 768-dimension vector">
         <span>0.12</span><span>-0.04</span><span>0.31</span><span>0.08</span>
         <span>-0.22</span><span>0.17</span><span>0.05</span><span>-0.11</span>
       </div>
-      <div class="tv-chip-row">${chip("384 dimensions", true)}${chip("no embedding API key")}</div>
-      <p class="tv-note">The model is loaded once per process and reused for both chunks and questions.</p>`;
+      <div class="tv-chip-row">${chip("768 dimensions", true)}${chip("Google Gemini API")}</div>
+      <p class="tv-note">The same model embeds both chunks during ingestion and questions at retrieval time.</p>`;
   },
 
-  chroma() {
-    return `${title("Persistent vector collection")}
+  qdrant() {
+    return `${title("Qdrant Cloud")}
       <div class="tv-store">
-        <div class="tv-store__box"><strong>Vectors</strong><span>384-dim embeddings</span></div>
+        <div class="tv-store__box"><strong>Vectors</strong><span>768-dim embeddings</span></div>
         <div class="tv-store__box"><strong>Documents</strong><span>chunk text</span></div>
         <div class="tv-store__box"><strong>Metadata</strong><span>doc_id · filename · chunk_index</span></div>
-        <div class="tv-store__box"><strong>On disk</strong><span>data/chroma_db</span></div>
+        <div class="tv-store__box"><strong>In the cloud</strong><span>Qdrant Cloud</span></div>
       </div>
-      <div class="tv-chip-row">${chip("document_collection_v2", true)}${chip("persistent")}</div>
+      <div class="tv-chip-row">${chip("document_collection_v2", true)}${chip("cosine distance")}</div>
       <p class="tv-note">Deleting a document removes every vector whose metadata matches its doc_id.</p>`;
   },
 
@@ -128,7 +128,7 @@ page_label: "12"</pre>
     return `${title("Query side")}
       ${node("Question", "“What changed in revenue this year?”")}
       ${arrow()}
-      ${node("Same MiniLM embedding model", "same normalisation", true)}
+      ${node("gemini-embedding-2", "Google Gemini API", true)}
       ${arrow()}
       <div class="tv-vector" aria-label="Illustration of the query vector">
         <span>0.09</span><span>0.21</span><span>-0.13</span><span>0.27</span>
@@ -214,15 +214,15 @@ page_label: "12"</pre>
             <span class="tv-lane__node">Upload</span><span class="tv-lane__arrow">→</span>
             <span class="tv-lane__node">Loader</span><span class="tv-lane__arrow">→</span>
             <span class="tv-lane__node">Splitter</span><span class="tv-lane__arrow">→</span>
-            <span class="tv-lane__node">Embeddings</span><span class="tv-lane__arrow">→</span>
-            <span class="tv-lane__node">ChromaDB</span>
+            <span class="tv-lane__node">Gemini API</span><span class="tv-lane__arrow">→</span>
+            <span class="tv-lane__node">Qdrant Cloud</span>
           </div>
         </div>
         <div class="tv-lane">
           <p class="tv-lane__label">Question answering</p>
           <div class="tv-lane__flow">
             <span class="tv-lane__node">Question</span><span class="tv-lane__arrow">→</span>
-            <span class="tv-lane__node">Embed</span><span class="tv-lane__arrow">→</span>
+            <span class="tv-lane__node">Embed (Gemini)</span><span class="tv-lane__arrow">→</span>
             <span class="tv-lane__node">Retrieve</span><span class="tv-lane__arrow">→</span>
             <span class="tv-lane__node">Prompt</span><span class="tv-lane__arrow">→</span>
             <span class="tv-lane__node">Groq</span><span class="tv-lane__arrow">→</span>
