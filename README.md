@@ -1,9 +1,11 @@
 # Document Chatbot
 
 Ask grounded questions about your own PDF, TXT and DOCX files. The backend is a
-FastAPI RAG service; the frontend is plain HTML/CSS/JS with no build step and is
-served by the same FastAPI process.
+FastAPI RAG service deployed on Render; the frontend is plain HTML/CSS/JS hosted
+on Cloudflare Workers.
 
+- Live frontend: https://document-chatbot.omm512462.workers.dev/
+- Live backend: https://document-chatbot-urue.onrender.com/
 - Architecture and endpoint reference: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md)
 - Engineering decisions: [`docs/DECISIONS.md`](docs/DECISIONS.md)
 
@@ -13,9 +15,9 @@ served by the same FastAPI process.
 |---|---|
 | API | FastAPI + Uvicorn |
 | Orchestration | LangChain 1.x (LCEL) |
-| Vector store | ChromaDB (persistent, local) |
+| Vector store | Qdrant Cloud (768-dim, Cosine distance) |
 | Chat model | Groq `openai/gpt-oss-20b` (temperature 0, 2 retries) |
-| Embeddings | Local Hugging Face `sentence-transformers/all-MiniLM-L6-v2` (384-dim, CPU) |
+| Embeddings | Google Gemini `gemini-embedding-2` API (768-dim, normalized) |
 | Frontend | Plain HTML, CSS, JavaScript (no build step) |
 | Tests | pytest + FastAPI `TestClient`, isolated temp storage |
 
@@ -43,8 +45,12 @@ document-chatbot/
 │   ├── text_splitter.py       # chunking + metadata
 │   ├── pipeline.py            # load -> split -> chunk metadata
 │   └── exceptions.py
-├── embeddings/embedding_model.py   # cached HuggingFaceEmbeddings factory
-├── vectorstore/chroma_store.py     # Chroma wrapper + safe replacement
+├── embeddings/
+│   ├── embedding_model.py     # cached GeminiEmbedding factory
+│   └── gemini_embedding.py    # Gemini Embedding API client (768-dim, batched)
+├── vectorstore/
+│   ├── qdrant_store.py        # Qdrant Cloud wrapper (replaces ChromaDB)
+│   └── chroma_store.py        # ChromaDB implementation (kept for rollback)
 ├── retrieval/retriever.py          # top-k retrieval with optional doc filter
 ├── chains/
 │   ├── prompt_template.py     # grounded prompt (context is untrusted data)
@@ -82,10 +88,10 @@ document-chatbot/
 │   ├── test_vectorstore.py
 │   ├── test_ingestion.py
 │   ├── test_error_handling.py
+│   ├── test_gemini_embedding.py
+│   ├── test_qdrant_connection.py
 │   ├── test_real_llm.py       # opt-in real Groq test
 │   └── manual/                # original exploratory scripts (not collected)
-├── data/chroma_db/            # persisted vectors (gitignored)
-└── data/uploads/              # original uploads (gitignored)
 ```
 
 ## Setup (Windows PowerShell)
@@ -97,13 +103,11 @@ python -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
-# edit .env and set GROQ_API_KEY
+# edit .env and set GROQ_API_KEY, QDRANT_URL, QDRANT_API_KEY, GEMINI_API_KEY
 ```
 
-First install downloads PyTorch + sentence-transformers (roughly 1 GB); the first
-embedding call downloads the model (~90 MB). If PowerShell blocks activation, run
-`Set-ExecutionPolicy -Scope Process Bypass` or call `.\.venv\Scripts\python.exe`
-directly.
+No PyTorch or sentence-transformers download is required. Embeddings are served by
+the Google Gemini Embedding API.
 
 ## Run
 
@@ -130,8 +134,7 @@ share the same storage key. If a control appears unresponsive after an update,
 hard-refresh the page (`Ctrl+Shift+R`) to drop cached CSS/JS, and make sure you are
 using the `/app/` URL rather than opening a `frontend/*.html` file directly.
 
-Run **one** Uvicorn worker in local development. Chroma's persistent mode is
-SQLite-backed and multiple writers can lock or corrupt the same directory.
+Run **one** Uvicorn worker in local development.
 
 ## Site pages and tours
 
@@ -171,20 +174,28 @@ Settings live in `config/settings.py` and are read from environment variables or
 
 ```dotenv
 GROQ_API_KEY=...
+QDRANT_URL=...
+QDRANT_API_KEY=...
+GEMINI_API_KEY=...
 ```
 
 | Variable | Default | Notes |
 |---|---|---|
 | `GROQ_API_KEY` | — | <https://console.groq.com/keys> |
+| `GEMINI_API_KEY` | — | <https://aistudio.google.com/app/apikey> |
+| `QDRANT_URL` | — | Qdrant Cloud cluster URL |
+| `QDRANT_API_KEY` | — | Qdrant Cloud API key |
 | `LLM_MODEL` | `openai/gpt-oss-20b` | Groq free tier; `gpt-oss-120b` also works |
 | `LLM_TEMPERATURE` | `0` | Deterministic answers |
 | `LLM_MAX_RETRIES` | `2` | Retries on transient provider errors |
 | `LLM_TIMEOUT_SECONDS` | `60` | Per-request timeout |
-| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | `EMBEDDING_MODEL` is accepted too |
+| `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-2` | Google Gemini Embedding API model |
+| `EMBEDDING_DIMENSIONS` | `768` | Embedding vector dimensions |
+| `EMBEDDING_BATCH_SIZE` | `100` | Texts per Gemini API call |
+| `EMBEDDING_MAX_RETRIES` | `6` | Retries on transient embedding failures |
+| `EMBEDDING_INITIAL_BACKOFF_SECONDS` | `3.0` | Initial backoff for embedding retries |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `200` | Changing them changes chunk IDs |
-| `CHROMA_COLLECTION_NAME` | `document_collection_v2` | Use a new name when changing embedding models |
-| `CHROMA_PERSIST_DIRECTORY` | `data/chroma_db` | Persistent Chroma directory |
-| `UPLOAD_DIRECTORY` | `data/uploads` | Original files |
+| `UPLOAD_DIRECTORY` | `data/uploads` | Temporary files during ingestion only |
 | `MAX_FILE_SIZE_BYTES` | `10485760` (10 MB) | Also enforced client-side |
 | `ALLOWED_EXTENSIONS` | `[".pdf", ".docx", ".txt"]` | JSON list |
 | `DEFAULT_TOP_K` / `MAX_TOP_K` | `3` / `20` | Retrieval depth |
@@ -208,7 +219,7 @@ All endpoints are under `/api`. Errors use one envelope:
 | `GET` | `/api/health` | Cheap readiness check (no model call) |
 | `GET` | `/api/documents/` | List indexed documents |
 | `POST` | `/api/documents/upload` | Upload **one** file (`multipart/form-data`, field `file`) |
-| `DELETE` | `/api/documents/{doc_id}` | Delete vectors, then stored files |
+| `DELETE` | `/api/documents/{doc_id}` | Delete vectors belonging to the document |
 | `POST` | `/api/chat/` | Retrieve chunks and generate an answer |
 
 Chat request:
@@ -229,13 +240,14 @@ deleted after).
 
 ## Reliability and error handling
 
-- Uploads stream to a UUID directory with a hard size limit; the file signature
+- Uploads stream to a temporary file with a hard size limit; the file signature
   (magic bytes) is checked before ingestion.
 - A failed upload removes partial vectors **only** for a brand-new document, so a
   failed replacement cannot destroy the previously working version.
-- Deletion removes vectors first, then files. If a file cannot be removed, the
-  API returns `200` with `warnings` instead of pretending the document still
-  exists.
+- Duplicate detection: if a document with the same SHA-256 content hash already
+  exists in Qdrant, ingestion and embedding are skipped entirely.
+- Deletion removes vectors from Qdrant. Original files are temporary during
+  ingestion only and are not stored persistently.
 - The LLM is not called when retrieval returns no chunks; the API returns a
   deterministic "not found in the provided documents" answer.
 - Provider failures are translated to stable codes (`LLM_RATE_LIMIT`,
@@ -244,10 +256,12 @@ deleted after).
   clients.
 - All logs go through `utils/logging_config.py`. Log lines include request
   context (lengths, counts, short doc IDs) but no document contents or keys.
+- The backend health check retries every 5 seconds for up to 3 minutes while
+  Render spins up from cold start.
 
 ## Tests
 
-The normal suite never touches real ChromaDB/uploads and never calls Groq. It
+The normal suite never touches real Qdrant and never calls Groq or Gemini. It
 uses temporary directories, deterministic fake embeddings and a fake chat model.
 
 ```powershell
@@ -276,12 +290,12 @@ from pytest collection. See [`tests/manual/README.md`](tests/manual/README.md).
 - Single-turn chat only; no conversation memory.
 - No authentication, rate limiting or multi-user isolation. Run locally or put it
   behind a trusted gateway.
-- Local Chroma + local embeddings are intended for one process and modest
-  document sets. Use a Chroma server and a hosted embedding model to scale out.
-- Uploads are synchronous, so large PDFs keep the request open while CPU
-  embeddings run.
-- Deleting a document scans upload directories by content hash; that is O(files)
-  and fine for a local library but not for huge stores.
+- The Gemini Embedding free tier is limited to 100 embedding requests per minute.
+  Large or rapid successive uploads may trigger rate-limit errors.
+- Uploads are synchronous, so large PDFs keep the request open while embeddings
+  run.
+- Render free tier spins down after 15 minutes of inactivity; the first request
+  after a spin-down incurs a cold start (~1 minute).
 - Retrieval is similarity search only: no hybrid keyword search and no reranking.
 - Scanned/image-only PDFs need OCR, which is not implemented.
 - The frontend is intentionally framework-free and has no bundler.
@@ -293,3 +307,6 @@ from pytest collection. See [`tests/manual/README.md`](tests/manual/README.md).
 3. Add structured JSON logging and request IDs for production log aggregation.
 4. Add coverage reporting (`pytest-cov`) and a CI workflow.
 5. Add authentication and per-user document namespaces before exposing the app.
+6. Add hybrid search combining vector similarity with keyword matching.
+7. Add OCR support for scanned/image-only PDFs.
+```
