@@ -1752,6 +1752,14 @@ body.chat-fullscreen-body {
   max-width: none !important;
 }
 
+.app,
+.workspace {
+  isolation: auto !important;
+  transform: none !important;
+  filter: none !important;
+  perspective: none !important;
+}
+
 #toggle-fullscreen {
   display: inline-flex !important;
   align-items: center !important;
