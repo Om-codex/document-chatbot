@@ -26,6 +26,7 @@ from utils.validation import InvalidDocumentIdError as InvalidDocumentIdFormatEr
 from utils.validation import validate_doc_id
 from vectorstore.qdrant_store import (
     add_documents,
+    count_document_chunks,
     delete_documents,
     document_exists,
     get_all_documents,

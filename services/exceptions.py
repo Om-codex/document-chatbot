@@ -54,4 +54,4 @@ class InvalidDocumentSelectionError(ChatServiceError):
 
 
 class RetrievalError(ChatServiceError):
-    """Embedding, Chroma retrieval, or context assembly failed."""
+    """Embedding, Qdrant retrieval, or context assembly failed."""
