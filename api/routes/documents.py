@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, File, Path, UploadFile
 
 from api.errors import api_error
-from api.schemas.documents import (
+from schemas.documents import (
     DocumentDeleteResponse,
     DocumentListResponse,
     DocumentUploadResponse,

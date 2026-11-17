@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter
 
-from api.schemas.health import HealthResponse
+from schemas.health import HealthResponse
 from config.settings import settings
 from vectorstore.qdrant_store import get_document_count
 

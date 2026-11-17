@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter
 
 from api.errors import api_error
-from api.schemas.chat import ChatRequest, ChatResponse
+from schemas.chat import ChatRequest, ChatResponse
 from generation.exceptions import (
     LLMNotConfiguredError,
     LLMProviderError,
