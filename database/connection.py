@@ -35,3 +35,16 @@ SessionLocal = sessionmaker(
 # Base class for all database models
 class Base(DeclarativeBase):
   pass
+
+
+def get_db():
+    """
+    Provides a database session for each request.
+    """
+
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
