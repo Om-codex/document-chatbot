@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from services import document_service
-from vectorstore.chroma_store import get_all_documents
+from vectorstore.qdrant_store import get_all_documents
 
 
 def test_list_documents_empty(client):
@@ -33,6 +33,20 @@ def test_upload_txt_document(client, upload_document):
     assert listing["documents"][0]["doc_id"] == payload["doc_id"]
     assert listing["documents"][0]["filename"] == "notes.txt"
     assert listing["documents"][0]["total_chunks"] == payload["total_chunks"]
+
+
+def test_upload_identical_content_is_idempotent(client, upload_document):
+    first = upload_document("notes.txt", b"duplicate content", "text/plain")
+    assert first.status_code == 200, first.text
+
+    second = upload_document("notes-copy.txt", b"duplicate content", "text/plain")
+
+    assert second.status_code == 200, second.text
+    payload = second.json()
+    assert payload["message"] == "Document already indexed."
+    assert payload["doc_id"] == first.json()["doc_id"]
+    assert payload["total_chunks"] == first.json()["total_chunks"]
+    assert client.get("/api/documents/").json()["total_documents"] == 1
 
 
 def test_upload_pdf_document(client, upload_document):

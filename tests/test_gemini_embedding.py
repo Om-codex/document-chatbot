@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from config.settings import settings
 from embeddings.gemini_embedding import GeminiEmbedding
 from langchain_core.embeddings import Embeddings
 
@@ -71,11 +72,11 @@ def test_gemini_embedding_has_required_methods():
 def test_construction_with_plain_string_key():
     with patch("embeddings.gemini_embedding.genai.Client", return_value=MagicMock()):
         emb = GeminiEmbedding(api_key="test-key")
-        assert emb.model == "gemini-embedding-2"
-        assert emb.dimensions == 768
-        assert emb.batch_size == 50
-        assert emb.normalize is True
-        assert emb.max_retries == 3
+        assert emb.model == settings.gemini_embedding_model
+        assert emb.dimensions == settings.embedding_dimensions
+        assert emb.batch_size == settings.embedding_batch_size
+        assert emb.normalize is settings.normalize_embeddings
+        assert emb.max_retries == settings.embedding_max_retries
 
 
 def test_construction_reads_settings(monkeypatch):

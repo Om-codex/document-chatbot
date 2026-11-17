@@ -1,8 +1,8 @@
 """Shared pytest fixtures.
 
-Every test runs against a temporary Chroma directory and a temporary upload
-directory.  The real Hugging Face embedding model and the real Groq API are
-never used by the normal suite.
+Every test runs against an in-memory Qdrant collection and a temporary upload
+directory.  The real Gemini embedding API, Qdrant Cloud and Groq API are never
+used by the normal suite.
 """
 
 import hashlib
@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
+from qdrant_client import QdrantClient
 
 # Keep the normal suite away from real credentials even if .env exists.  The
 # opt-in real-provider test must be able to use the developer's real key.
@@ -27,7 +28,6 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 from embeddings.embedding_model import get_embedding_model  # noqa: E402
 from generation.llm import get_llm  # noqa: E402
 from services import document_service  # noqa: E402
-from vectorstore import chroma_store  # noqa: E402
 from vectorstore import qdrant_store  # noqa: E402
 
 
@@ -128,14 +128,12 @@ def reset_process_caches():
 
     get_embedding_model.cache_clear()
     get_llm.cache_clear()
-    chroma_store.get_vector_store.cache_clear()
     qdrant_store.get_vector_store.cache_clear()
 
     yield
 
     get_embedding_model.cache_clear()
     get_llm.cache_clear()
-    chroma_store.get_vector_store.cache_clear()
     qdrant_store.get_vector_store.cache_clear()
 
 
@@ -146,25 +144,24 @@ def isolated_storage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     fake_embeddings = DeterministicFakeEmbeddings()
     collection_name = f"test_collection_{uuid4().hex}"
 
-    monkeypatch.setattr(chroma_store, "get_embedding_model", lambda: fake_embeddings)
-    monkeypatch.setattr(chroma_store, "CHROMA_PATH", tmp_path / "chroma")
-    monkeypatch.setattr(chroma_store, "COLLECTION_NAME", collection_name)
+    # In-memory Qdrant keeps the suite independent of Qdrant Cloud credentials
+    # and network access while exercising the real vector-store code paths.
+    qdrant_client = QdrantClient(location=":memory:")
 
     monkeypatch.setattr(qdrant_store, "get_embedding_model", lambda: fake_embeddings)
     monkeypatch.setattr(qdrant_store, "COLLECTION_NAME", collection_name)
     monkeypatch.setattr(qdrant_store, "VECTOR_SIZE", fake_embeddings.size)
+    monkeypatch.setattr(qdrant_store, "_get_qdrant_client", lambda: qdrant_client)
 
     monkeypatch.setattr(document_service, "UPLOAD_DIR", tmp_path / "uploads")
     monkeypatch.setattr(document_service, "ALLOWED_EXTENSIONS", {".pdf", ".docx", ".txt"})
     monkeypatch.setattr(document_service, "MAX_FILE_SIZE", 10 * 1024 * 1024)
     monkeypatch.setattr(document_service, "READ_CHUNK_SIZE", 1024 * 1024)
 
-    chroma_store.get_vector_store.cache_clear()
     qdrant_store.get_vector_store.cache_clear()
 
     yield tmp_path
 
-    chroma_store.get_vector_store.cache_clear()
     qdrant_store.get_vector_store.cache_clear()
 
 
