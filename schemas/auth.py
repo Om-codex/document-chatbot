@@ -39,7 +39,7 @@ class UserLogin(BaseModel):
     max_length = 128,
   )
 
-  @field_validator("email", model = "before")
+  @field_validator("email", mode = "before")
   @classmethod
   def normalize_email(cls, value):
     if isinstance(value, str):
