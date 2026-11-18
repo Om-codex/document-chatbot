@@ -4,6 +4,7 @@ uvicorn[standard]==0.54.0
 python-multipart==0.0.33
 pydantic-settings==2.16.2
 python-dotenv==1.2.4
+email-validator>=2.0.0
 
 # LangChain (v1.x — chains are built with LCEL from langchain-core)
 langchain-core==1.7.4
