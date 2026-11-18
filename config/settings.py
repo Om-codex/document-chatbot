@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     max_top_k: int = 20
 
     # -------------------------------------
+    # Database Configuration
+    # -------------------------------------
+
+    database_url: str = (
+        f"sqlite:///{(BASE_DIR / 'data' / 'users.db').as_posix()}"
+    )
+
+    # -------------------------------------
     # Frontend
     # -------------------------------------
 
