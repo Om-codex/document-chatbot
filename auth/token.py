@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import jwt
+from jwt.exceptions import InvalidTokenError
 from config.settings import settings
 
 # Fixed signing algortihm
@@ -40,3 +41,45 @@ def create_access_token(
   )
 
   return token
+
+def verify_access_token(token: str) -> dict | None:
+  """
+  Verify JWT signature and expiration.
+  
+  Returns decoded claims if valid.
+  Returns None if invalid or expired.
+  """
+
+  if settings.jwt_secret_key is None:
+    raise RuntimeError("JWT_SECRET_KEY is not configured")
+
+  secret_key = settings.jwt_secret_key.get_secret_value()
+
+  if len(secret_key.encode("utf-8")) < 32:
+    raise RuntimeError(
+      "JWT_SECRET_KEY must contain at least 32 bytes"
+    )
+
+  try:
+    payload = jwt.decode(
+      token,
+      secret_key,
+      algorithms=[JWT_ALGORITHM],
+      options={
+        "require": ["exp","iat","sub"]
+      },
+    )
+
+    # Validate subject
+    user_id = payload.get("sub")
+
+    if not isinstance(user_id, str) or not user_id.isdecimal():
+      return None
+
+    if int(user_id) <= 0:
+      return None
+
+    return payload
+  
+  except InvalidTokenError:
+    return None
