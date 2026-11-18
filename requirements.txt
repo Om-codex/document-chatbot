@@ -34,3 +34,9 @@ google-genai==3.3.0
 
 # Athentication Database
 sqlalchemy>=2.0,<3.0
+
+# Password hashing
+pwdlib[argon2]>=0.2.1,<1.0
+
+# JWT authentication
+PyJWT>=2.10,<3.0
