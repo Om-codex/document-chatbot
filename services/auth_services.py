@@ -30,7 +30,7 @@ def register_user(
   new_user = User(
     email = str(user_data.email),
     hashed_password = hashed_password,
-    role = "User",
+    role = "editor",
   )
 
   # 4. Save user to database
