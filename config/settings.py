@@ -125,6 +125,14 @@ class Settings(BaseSettings):
     )
 
     # -------------------------------------
+    # JWT Authentication Configuration
+    # -------------------------------------
+
+    jwt_secret_key: SecretStr | None = None
+
+    jwt_access_token_expire_minutes: int = 30
+
+    # -------------------------------------
     # Frontend
     # -------------------------------------
 
