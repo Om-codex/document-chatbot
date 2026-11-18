@@ -28,3 +28,26 @@ class UserResponse(BaseModel):
   email: EmailStr
   role : str
   is_active: bool
+
+class UserLogin(BaseModel):
+  """Incoming user credentials."""
+
+  email : EmailStr
+
+  password : str = Field(
+    min_length = 8,
+    max_length = 128,
+  )
+
+  @field_validator("email", model = "before")
+  @classmethod
+  def normalize_email(cls, value):
+    if isinstance(value, str):
+      return value.strip().lower()
+    return value
+
+class LoginResponse(BaseModel):
+  """Sucessfull login response."""
+
+  message: str
+  user: UserResponse
