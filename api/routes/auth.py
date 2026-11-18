@@ -5,6 +5,8 @@ from database.connection import get_db
 from schemas.auth import UserRegister, UserResponse, UserLogin, LoginResponse
 from services.auth_services import register_user, authenticate_user
 from auth.token import create_access_token
+from auth.dependencies import get_current_user
+from database.models import User
 
 router = APIRouter(
   prefix="/auth",
@@ -67,3 +69,16 @@ def login(
     "token_type": "bearer",
     "user" : user
   }
+
+
+@router.get(
+  "/me",
+  response_model=UserResponse,
+)
+def get_profile(
+  current_user: User = Depends(get_current_user),
+):
+  """
+  Return information about the authenticated user.
+  """
+  return current_user
