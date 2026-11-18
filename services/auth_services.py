@@ -68,7 +68,7 @@ def authenticate_user(
     return None
 
   # 3. Verify submitted password against stored hash
-  if not verify_password(password, user.hash_password):
+  if not verify_password(password, user.hashed_password):
     return None
 
   # 4. Check account status
