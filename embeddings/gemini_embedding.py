@@ -22,11 +22,6 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DIMENSIONS = 768
-DEFAULT_BATCH_SIZE = 50
-DEFAULT_MAX_RETRIES = 3
-DEFAULT_INITIAL_BACKOFF_SECONDS = 1.0
-
 
 class GeminiEmbedding(Embeddings):
     """LangChain-compatible embeddings backed by Google Gemini Embedding API.
