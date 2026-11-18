@@ -35,7 +35,7 @@ class User(Base):
   # User Role
   role: Mapped[str] = mapped_column(
     String(50),
-    default = "user",
+    default = "editor",
     nullable = False,
   )
 
