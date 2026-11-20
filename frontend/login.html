@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Sign in or create an account for the Document Chatbot." />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Sign in — Document Chatbot</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css?v=3" />
+  <script src="js/theme.js"></script>
+</head>
+<body>
+  <main class="auth-page">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <span class="brand-mark" aria-hidden="true">DC</span>
+        <div>
+          <h1>Document Chatbot</h1>
+          <p class="muted small">Grounded answers from your own files</p>
+        </div>
+      </div>
+
+      <div id="auth-banner" class="auth-banner" role="status" aria-live="polite" hidden></div>
+
+      <!-- ---------------------------------------------------------- login -->
+      <section id="login-section" aria-labelledby="login-heading">
+        <div class="auth-head">
+          <h2 id="login-heading">Welcome back</h2>
+          <p class="muted small">Sign in to open your document library.</p>
+        </div>
+
+        <form id="login-form" class="auth-form" novalidate autocomplete="on">
+          <label class="field" for="login-email">
+            <span>Email address</span>
+            <input id="login-email" name="email" type="email" inputmode="email"
+                   autocomplete="username" placeholder="you@example.com"
+                   required maxlength="254" />
+          </label>
+
+          <div class="password-field">
+            <label class="field" for="login-password">
+              <span>Password</span>
+              <input id="login-password" name="password" type="password"
+                     autocomplete="current-password" placeholder="Your password"
+                     required minlength="8" maxlength="128" />
+            </label>
+            <button class="password-toggle" type="button"
+                    data-password-toggle="login-password"
+                    aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+
+          <p id="login-error" class="form-error" role="alert" hidden></p>
+
+          <button id="login-submit" class="btn btn--primary auth-submit" type="submit">
+            <span class="btn-label">Sign in</span>
+            <span class="btn-spinner spinner-ring" aria-hidden="true" hidden></span>
+          </button>
+        </form>
+
+        <p class="auth-switch">
+          Don't have an account?
+          <button class="link-button link-text" type="button" data-mode="register">Create one</button>
+        </p>
+      </section>
+
+      <!-- ------------------------------------------------------ register -->
+      <section id="register-section" aria-labelledby="register-heading" hidden>
+        <div class="auth-head">
+          <h2 id="register-heading">Create your account</h2>
+          <p class="muted small">Private document storage, one account per email.</p>
+        </div>
+
+        <form id="register-form" class="auth-form" novalidate autocomplete="on">
+          <label class="field" for="register-email">
+            <span>Email address</span>
+            <input id="register-email" name="email" type="email" inputmode="email"
+                   autocomplete="username" placeholder="you@example.com"
+                   required maxlength="254" />
+          </label>
+
+          <div class="password-field">
+            <label class="field" for="register-password">
+              <span>Password</span>
+              <input id="register-password" name="password" type="password"
+                     autocomplete="new-password" placeholder="Choose a password"
+                     required minlength="8" maxlength="128" />
+            </label>
+            <button class="password-toggle" type="button"
+                    data-password-toggle="register-password"
+                    aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+
+          <div class="password-field">
+            <label class="field" for="register-confirm">
+              <span>Confirm password</span>
+              <input id="register-confirm" name="confirmPassword" type="password"
+                     autocomplete="new-password" placeholder="Repeat your password"
+                     required minlength="8" maxlength="128" />
+            </label>
+            <button class="password-toggle" type="button"
+                    data-password-toggle="register-confirm"
+                    aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+
+          <p class="auth-requirements">Password requirements: 8–128 characters. No other complexity rules.</p>
+          <p id="register-error" class="form-error" role="alert" hidden></p>
+
+          <button id="register-submit" class="btn btn--primary auth-submit" type="submit">
+            <span class="btn-label">Create account</span>
+            <span class="btn-spinner spinner-ring" aria-hidden="true" hidden></span>
+          </button>
+        </form>
+
+        <p class="auth-switch">
+          Already have an account?
+          <button class="link-button link-text" type="button" data-mode="login">Sign in</button>
+        </p>
+      </section>
+
+      <a class="site-back auth-home" href="index.html">
+        <span aria-hidden="true">←</span><span>Back to site</span>
+      </a>
+    </div>
+  </main>
+
+  <script type="module" src="js/auth-page.js"></script>
+</body>
+</html>

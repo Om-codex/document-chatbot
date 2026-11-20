@@ -5,6 +5,7 @@
  */
 
 import { CONFIG } from "./config.js";
+import { getAccessToken, endSession } from "./session.js";
 
 export class ApiError extends Error {
   constructor(message, { code = "UNKNOWN", status = 0, details = null } = {}) {
@@ -22,6 +23,28 @@ export class ApiError extends Error {
 
 const NETWORK_MESSAGE =
   "Cannot reach the API. Is the FastAPI server running? (Append ?mock=1 to preview without it.)";
+
+const SESSION_MESSAGE = "Your session has expired. Please sign in again.";
+const AUTH_REQUIRED_MESSAGE = "Authentication required. Please sign in.";
+const FORBIDDEN_MESSAGE =
+  "Access denied. You do not have permission to perform this action.";
+
+/** 401 always invalidates the local session; 403 never does. */
+function unauthorizedError() {
+  return new ApiError(SESSION_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+}
+
+function forbiddenError(error) {
+  const message =
+    error && error.message && !error.message.includes("HTTP 403")
+      ? error.message
+      : FORBIDDEN_MESSAGE;
+  return new ApiError(message, {
+    code: "FORBIDDEN",
+    status: 403,
+    details: error ? error.details : null,
+  });
+}
 
 function buildApiError(payload, status) {
   const detail = payload && typeof payload === "object" ? payload.detail : null;
@@ -71,7 +94,22 @@ async function parseJson(response) {
   }
 }
 
-async function request(path, { method = "GET", body, signal, timeoutMs = CONFIG.requestTimeoutMs } = {}) {
+/**
+ * Every backend call goes through here. `auth` defaults to true so protected
+ * endpoints cannot accidentally be called without the Bearer token. Public
+ * endpoints (health, register, login) opt out explicitly.
+ */
+async function request(
+  path,
+  {
+    method = "GET",
+    body,
+    signal,
+    timeoutMs = CONFIG.requestTimeoutMs,
+    auth = true,
+    redirectOnUnauthorized = true,
+  } = {}
+) {
   const controller = new AbortController();
   let timedOut = false;
 
@@ -87,6 +125,19 @@ async function request(path, { method = "GET", body, signal, timeoutMs = CONFIG.
   }
 
   const headers = { Accept: "application/json" };
+  if (auth) {
+    const token = getAccessToken();
+    if (!token) {
+      endSession({ redirect: redirectOnUnauthorized });
+      throw new ApiError(AUTH_REQUIRED_MESSAGE, {
+        code: "AUTH_REQUIRED",
+        status: 401,
+      });
+    }
+    // The token is only ever placed in this header, never in a URL or log.
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   let payload;
   if (body instanceof FormData) {
     payload = body; // Let the browser set the multipart boundary.
@@ -104,7 +155,15 @@ async function request(path, { method = "GET", body, signal, timeoutMs = CONFIG.
     });
 
     const data = await parseJson(response);
-    if (!response.ok) throw buildApiError(data, response.status);
+    if (!response.ok) {
+      const error = buildApiError(data, response.status);
+      if (response.status === 401 && auth) {
+        endSession({ redirect: redirectOnUnauthorized });
+        throw unauthorizedError();
+      }
+      if (response.status === 403) throw forbiddenError(error);
+      throw error;
+    }
     return data;
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -134,10 +193,22 @@ async function request(path, { method = "GET", body, signal, timeoutMs = CONFIG.
  */
 function upload(path, file, onProgress, timeoutMs = CONFIG.uploadTimeoutMs) {
   return new Promise((resolve, reject) => {
+    const token = getAccessToken();
+    if (!token) {
+      endSession();
+      reject(new ApiError(AUTH_REQUIRED_MESSAGE, {
+        code: "AUTH_REQUIRED",
+        status: 401,
+      }));
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
     xhr.open("POST", CONFIG.apiBase + path);
     xhr.timeout = timeoutMs;
     xhr.setRequestHeader("Accept", "application/json");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    // Deliberately no Content-Type: the browser sets the multipart boundary.
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && typeof onProgress === "function") {
@@ -155,7 +226,15 @@ function upload(path, file, onProgress, timeoutMs = CONFIG.uploadTimeoutMs) {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(data);
       } else {
-        reject(buildApiError(data, xhr.status));
+        const error = buildApiError(data, xhr.status);
+        if (xhr.status === 401) {
+          endSession();
+          reject(unauthorizedError());
+        } else if (xhr.status === 403) {
+          reject(forbiddenError(error));
+        } else {
+          reject(error);
+        }
       }
     };
 
@@ -172,8 +251,34 @@ function upload(path, file, onProgress, timeoutMs = CONFIG.uploadTimeoutMs) {
 
 export function createRealApi() {
   return {
+    /* ------------------------------- authentication (public except /me) */
+
+    register({ email, password }) {
+      return request("/api/auth/register", {
+        method: "POST",
+        body: { email, password },
+        auth: false, // never send a role; the backend assigns it
+      });
+    },
+
+    login({ email, password }) {
+      return request("/api/auth/login", {
+        method: "POST",
+        body: { email, password },
+        auth: false,
+      });
+    },
+
+    me() {
+      // auth.js decides what a 401 means, so no automatic redirect here.
+      return request("/api/auth/me", { redirectOnUnauthorized: false });
+    },
+
     health() {
-      return request("/api/health", { timeoutMs: CONFIG.healthTimeoutMs });
+      return request("/api/health", {
+        timeoutMs: CONFIG.healthTimeoutMs,
+        auth: false,
+      });
     },
 
     listDocuments() {

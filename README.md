@@ -258,6 +258,39 @@ deleted after).
 - The backend health check retries every 5 seconds for up to 3 minutes while
   Render spins up from cold start.
 
+## Authentication (frontend integration)
+
+The API is JWT Bearer based; the backend owns registration, login, hashing and
+authorization. The frontend adds `frontend/login.html` (sign in / create
+account) and guards the dashboard at `frontend/chat.html`.
+
+1. `POST /api/auth/register` sends only `email` and `password`. Password rule is
+   **8–128 characters**, with no complexity policy. The backend assigns the
+   role (`editor`); the form never sends or accepts one.
+2. `POST /api/auth/login` returns `access_token`, `token_type: bearer` and the
+   public user. `frontend/js/auth.js` persists them through the single storage
+   module `frontend/js/session.js`.
+3. `GET /api/auth/me` validates the session on dashboard load, reload and after
+   login. `frontend/js/api.js` attaches `Authorization: Bearer <token>` to every
+   protected document and chat request. Uploads use XHR and deliberately do not
+   set `Content-Type`, so the browser supplies the multipart boundary.
+4. `401 Unauthorized` clears the session and redirects to the sign-in page.
+   `403 Forbidden` shows an access-denied message without logging the user out.
+5. Logout is frontend-only: it clears the session. No backend logout endpoint
+   exists or is needed.
+
+**Token-storage trade-off.** The backend returns the JWT in the response body,
+so the interim frontend keeps it in `localStorage` under
+`document-chatbot.session`, centralized in `session.js`. `localStorage` is
+readable by JavaScript and is therefore vulnerable to token theft through XSS;
+this is **not** a fully secure cookie replacement. Passwords are never stored,
+tokens are never logged, and tokens are never placed in URLs. Moving to
+HttpOnly + Secure + SameSite cookies would require a backend change and is out
+of scope for this integration.
+
+The marketing pages and `GET /api/health` stay public; only the document and
+chat features require authentication.
+
 ## Tests
 
 The normal suite never touches real Qdrant and never calls Groq or Gemini. It
@@ -289,8 +322,10 @@ The original milestone scripts and the live Qdrant/Gemini smoke checks live in
 ## Limitations
 
 - Single-turn chat only; no conversation memory.
-- No authentication, rate limiting or multi-user isolation. Run locally or put it
-  behind a trusted gateway.
+- No rate limiting yet. Authentication and per-user document isolation are
+  implemented, but the JWT is held in browser storage (see above) and frontend
+  route protection is not a security boundary: the backend validates every
+  protected operation.
 - The Gemini Embedding free tier is limited to 100 embedding requests per minute.
   Large or rapid successive uploads may trigger rate-limit errors.
 - Uploads are synchronous, so large PDFs keep the request open while embeddings
@@ -307,7 +342,7 @@ The original milestone scripts and the live Qdrant/Gemini smoke checks live in
 2. Add per-document re-index/repair tooling for interrupted replacements.
 3. Add structured JSON logging and request IDs for production log aggregation.
 4. Add coverage reporting (`pytest-cov`) and a CI workflow.
-5. Add authentication and per-user document namespaces before exposing the app.
+5. Move sessions from browser storage to backend-managed HttpOnly cookies.
 6. Add hybrid search combining vector similarity with keyword matching.
 7. Add OCR support for scanned/image-only PDFs.
 ```

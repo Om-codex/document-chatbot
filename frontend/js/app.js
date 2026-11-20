@@ -11,10 +11,19 @@
 import { CONFIG } from "./config.js";
 import { createRealApi, ApiError } from "./api.js";
 import { createMockApi } from "./mock.js";
+import { requireAuthentication, logoutUser } from "./auth.js";
+import { loginUrl } from "./session.js";
 
 const api = CONFIG.useMock ? createMockApi() : createRealApi();
 
 const dom = {
+  appShell: document.getElementById("app-shell"),
+  authGate: document.getElementById("auth-gate"),
+  authGateText: document.getElementById("auth-gate-text"),
+  authGateLink: document.getElementById("auth-gate-link"),
+  userEmail: document.getElementById("user-email"),
+  logoutBtn: document.getElementById("logout-btn"),
+
   healthPill: document.getElementById("health-pill"),
 
   dropzone: document.getElementById("dropzone"),
@@ -235,6 +244,14 @@ function announce(message) {
   setTimeout(() => {
     dom.announcer.textContent = message;
   }, 30);
+}
+
+/** Keep the dashboard hidden until authentication has been verified. */
+function showAuthGate(message) {
+  if (dom.authGateText) dom.authGateText.textContent = message;
+  if (dom.authGateLink) dom.authGateLink.hidden = false;
+  if (dom.authGate) dom.authGate.hidden = false;
+  if (dom.appShell) dom.appShell.hidden = true;
 }
 
 /* --------------------------------------------------------------- health UI */
@@ -1168,6 +1185,7 @@ function clearChat() {
 
 function bindEvents() {
   dom.bannerClose.addEventListener("click", () => setBanner(null));
+  dom.logoutBtn?.addEventListener("click", () => logoutUser());
 
   dom.uploadBtn.addEventListener("click", openPicker);
   dom.pasteBtn.addEventListener("click", openTextDialog);
@@ -1275,6 +1293,25 @@ function autoGrow() {
 /* -------------------------------------------------------------------- init */
 
 async function init() {
+  if (dom.authGateLink) dom.authGateLink.href = loginUrl();
+
+  // Validate the session before rendering anything user-specific.
+  let user;
+  try {
+    user = await requireAuthentication();
+  } catch {
+    showAuthGate("Could not verify your session. Check your connection, then try again.");
+    return;
+  }
+  if (!user) {
+    showAuthGate("You need to sign in to open the document library.");
+    return;
+  }
+
+  if (dom.userEmail) dom.userEmail.textContent = user.email || "Signed in";
+  if (dom.authGate) dom.authGate.hidden = true;
+  if (dom.appShell) dom.appShell.hidden = false;
+
   renderMode();
   dom.topK.value = String(state.topK);
   bindEvents();

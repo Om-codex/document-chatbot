@@ -6,7 +6,7 @@
   <meta name="description" content="Ask grounded questions about your PDF, TXT and DOCX documents." />
   <title>Chat — Document Chatbot</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=2" />
+  <link rel="stylesheet" href="css/styles.css?v=3" />
   <script>
     // Self-contained theme controller: applies the saved theme before first paint
     // and binds the toggle via event delegation, so it works even if app.js fails
@@ -79,7 +79,16 @@
   </script>
 </head>
 <body>
-  <div class="app">
+  <!-- Visible until the stored session has been validated with /api/auth/me. -->
+  <div id="auth-gate" class="auth-gate" role="status" aria-live="polite">
+    <div class="auth-gate-card">
+      <span class="brand-mark" aria-hidden="true">DC</span>
+      <p id="auth-gate-text">Checking your session…</p>
+      <a id="auth-gate-link" class="btn btn--primary" href="login.html" hidden>Sign in</a>
+    </div>
+  </div>
+
+  <div class="app" id="app-shell" hidden>
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">DC</span>
@@ -106,6 +115,8 @@
             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
           </svg>
         </button>
+        <span id="user-email" class="user-chip" title="Signed in as"></span>
+        <button id="logout-btn" class="site-back" type="button" title="Sign out">Sign out</button>
         <span id="health-pill" class="pill pill--pending" role="status">Connecting…</span>
         <a class="github-link" href="https://github.com/Om-codex" target="_blank"
            rel="noopener noreferrer" title="Om-codex on GitHub"
@@ -296,6 +307,6 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 
-  <script type="module" src="js/app.js?v=2"></script>
+  <script type="module" src="js/app.js?v=3"></script>
 </body>
 </html>

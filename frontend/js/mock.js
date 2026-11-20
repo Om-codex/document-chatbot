@@ -10,6 +10,7 @@
 
 import { CONFIG } from "./config.js";
 import { ApiError } from "./api.js";
+import { getAccessToken, getStoredUser, clearSession } from "./session.js";
 
 const now = () => new Date().toISOString();
 
@@ -149,6 +150,70 @@ function pickChunks(docs, topK) {
 
 export function createMockApi() {
   return {
+    // Mock auth accepts any well-formed credentials so ?mock=1 can exercise the
+    // whole UI flow without a backend. No password is ever stored.
+    async register({ email, password } = {}) {
+      await wait(180);
+      const clean = String(email || "").trim().toLowerCase();
+      const secret = String(password || "");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+        throw new ApiError("Enter a valid email address.", {
+          code: "VALIDATION_ERROR",
+          status: 422,
+        });
+      }
+      if (secret.length < 8 || secret.length > 128) {
+        throw new ApiError("Password must be between 8 and 128 characters.", {
+          code: "VALIDATION_ERROR",
+          status: 422,
+        });
+      }
+      if (clean === "existing@example.com") {
+        throw new ApiError("Email is already registered.", {
+          code: "HTTP_409",
+          status: 409,
+        });
+      }
+      return { id: 1, email: clean, role: "editor", is_active: true };
+    },
+
+    async login({ email, password } = {}) {
+      await wait(200);
+      const clean = String(email || "").trim().toLowerCase();
+      const secret = String(password || "");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean) || secret.length < 8 || secret.length > 128) {
+        throw new ApiError("Enter a valid email and an 8–128 character password.", {
+          code: "VALIDATION_ERROR",
+          status: 422,
+        });
+      }
+      return {
+        message: "Login successfull",
+        access_token: "mock-access-token",
+        token_type: "bearer",
+        user: { id: 1, email: clean, role: "editor", is_active: true },
+      };
+    },
+
+    async me() {
+      await wait(80);
+      if (!getAccessToken()) {
+        clearSession();
+        throw new ApiError("Authentication required.", {
+          code: "AUTH_REQUIRED",
+          status: 401,
+        });
+      }
+      return (
+        getStoredUser() || {
+          id: 1,
+          email: "demo@example.com",
+          role: "editor",
+          is_active: true,
+        }
+      );
+    },
+
     async health() {
       await wait(180);
       return {

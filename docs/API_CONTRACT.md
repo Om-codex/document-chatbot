@@ -9,6 +9,52 @@ frontend is served from `/app` by the same process.
 - Field names are snake_case everywhere.
 - Document IDs are 64-character lowercase SHA-256 hex strings.
 
+## Authentication
+
+`POST /api/auth/register`, `POST /api/auth/login` and `GET /api/health` are
+public. Every `/api/documents/*` and `/api/chat/` route requires:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Registration accepts only `email` and `password`; the backend assigns
+`role: "editor"`. Password length is 8–128 characters with no complexity rules,
+and emails are trimmed/lowercased by the backend.
+
+```http
+POST /api/auth/register
+{ "email": "user@example.com", "password": "SecurePassword123!" }
+
+-> 201 { "id": 1, "email": "user@example.com", "role": "editor", "is_active": true }
+-> 409 { "detail": "Email is already registered." }
+```
+
+```http
+POST /api/auth/login
+{ "email": "user@example.com", "password": "SecurePassword123!" }
+
+-> 200 {
+     "message": "Login successfull",
+     "access_token": "<JWT>",
+     "token_type": "bearer",
+     "user": { "id": 1, "email": "user@example.com", "role": "editor", "is_active": true }
+   }
+-> 401 { "detail": "Invalid Email or Password!" }
+```
+
+```http
+GET /api/auth/me
+Authorization: Bearer <access_token>
+
+-> 200 { "id": 1, "email": "user@example.com", "role": "editor", "is_active": true }
+-> 401 { "detail": "Invalid or expired token" }
+```
+
+There is no logout endpoint: the frontend discards its stored token. `403`
+means the authenticated user lacks permission; the frontend shows an
+access-denied message and keeps the session.
+
 ---
 
 ## 1. Error envelope
@@ -44,7 +90,10 @@ global handler to:
 | 400 | `NO_DOCUMENTS` | Collection is empty; ingest something first |
 | 400 | `INVALID_DOCUMENT_SELECTION` | One or more selected `doc_ids` are no longer indexed |
 | 400 | `INVALID_DOCUMENT_ID` | Malformed `doc_id` |
+| 401 | — | Missing, invalid or expired Bearer token (also invalid login) |
+| 403 | — | Authenticated but not permitted; do not log out |
 | 404 | `DOCUMENT_NOT_FOUND` | Unknown `doc_id` |
+| 409 | — | Duplicate email on registration |
 | 413 | `FILE_TOO_LARGE` | Per-file limit exceeded |
 | 415 | `INVALID_FILE_TYPE` | Extension or signature not allowed |
 | 422 | `EMPTY_DOCUMENT` | Empty or text-less file |
