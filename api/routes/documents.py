@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, File, Path, UploadFile
+from fastapi import APIRouter, File, Path, UploadFile, Depends
 
 from api.errors import api_error
 from schemas.documents import (
@@ -24,6 +24,8 @@ from services.exceptions import (
     MalformedDocumentError,
     UnsupportedDocumentError,
 )
+from database.models import User
+from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +40,10 @@ router = APIRouter(
 # -----------------------------------------
 
 @router.post("/upload", response_model=DocumentUploadResponse)
-def upload_document_route(file: UploadFile = File(...)):
+def upload_document_route(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     try:
         return upload_document(
+            user_id = current_user.id,
             filename=file.filename,
             file_stream=file.file,
         )
@@ -77,9 +80,9 @@ def upload_document_route(file: UploadFile = File(...)):
 # -----------------------------------------
 
 @router.get("/", response_model=DocumentListResponse)
-def list_documents_route():
+def list_documents_route(current_user: User = Depends(get_current_user)):
     try:
-        return list_documents()
+        return list_documents(user_id = current_user.id)
 
     except DocumentStorageError as exc:
         logger.exception("Document listing failed.")
@@ -101,9 +104,10 @@ def delete_document_route(
         pattern=r"^[a-f0-9]{64}$",
         description="64-character lowercase SHA-256 document ID.",
     ),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        return delete_document(doc_id)
+        return delete_document(current_user.id, doc_id)
 
     except DocumentNotFoundError as exc:
         raise api_error(404, "DOCUMENT_NOT_FOUND", str(exc))

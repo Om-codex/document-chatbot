@@ -17,6 +17,7 @@ htmlcov/
 coverage.xml
 
 # Local data / generated artifacts
+data/users.db
 data/chroma_db/*
 !data/chroma_db/.gitkeep
 

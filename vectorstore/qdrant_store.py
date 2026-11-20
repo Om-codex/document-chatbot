@@ -48,27 +48,32 @@ def _chunk_id_to_uuid(chunk_id: str) -> str:
     return str(uuid.uuid5(_QDRANT_NAMESPACE, chunk_id))
 
 
-def _doc_id_filter(doc_id: str) -> Filter:
-    """Build a Qdrant filter matching a single ``doc_id`` in point payload.
-
-    QdrantVectorStore nests document metadata under the ``metadata`` key, so
-    we filter on ``metadata.doc_id``.
-    """
+def _user_id_filter(user_id: int) -> Filter:
+    """Match all documents belonging to a specific user."""
 
     return Filter(
-        must=[FieldCondition(key="metadata.doc_id", match=MatchAny(any=[doc_id]))]
+        must = [
+            FieldCondition(
+                key="metadata.user_id",
+                match = MatchAny(any=[user_id]),
+            )
+        ]
     )
 
-
-def _doc_ids_filter(doc_ids: list[str]) -> Filter:
-    """Build a Qdrant filter matching any of the given ``doc_ids`` in payload."""
+def _user_doc_id_filter(user_id: int, doc_id: str) -> Filter:
+    """Match a specific document belonging to a specific user."""
 
     return Filter(
         must=[
             FieldCondition(
+                key="metadata.user_id",
+                match=MatchAny(any=[user_id]),
+            ),
+            FieldCondition(
                 key="metadata.doc_id",
-                match=MatchAny(any=doc_ids),
+                match=MatchAny(any=[doc_id]),
             )
+            
         ]
     )
 
@@ -193,15 +198,32 @@ def add_documents(chunks) -> list[str]:
     client = _get_qdrant_client()
     _ensure_collection(client)
 
+    
+    user_id = chunks[0].metadata.get("user_id")
+
+    if user_id is None:
+        raise ValueError("Every chunk must include a user_id.")
+
+    if any(chunk.metadata.get("user_id") != user_id for chunk in chunks):
+        raise ValueError("All chunks must belong to the same user.")
+
     # Deterministic UUID string IDs from chunk IDs.
-    new_ids = [f"{doc_id}_{chunk.metadata['chunk_index']}" for chunk in chunks]
-    new_uuid_ids = [_chunk_id_to_uuid(cid) for cid in new_ids]
+    new_ids = [
+        f"{user_id}_{doc_id}_{chunk.metadata['chunk_index']}"
+        for chunk in chunks
+    ]
+
+    new_uuid_ids = [
+        _chunk_id_to_uuid(cid)
+        for cid in new_ids
+    ]
+
     new_uuid_set = set(new_uuid_ids)
 
     # Find existing chunks for this document (scroll returns UUID point IDs).
     existing_points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
-        scroll_filter=_doc_id_filter(doc_id),
+        scroll_filter=_user_doc_id_filter(user_id, doc_id),
         with_payload=False,
         with_vectors=False,
         limit=10000,
@@ -263,7 +285,7 @@ def add_documents(chunks) -> list[str]:
     return new_ids
 
 
-def get_all_documents() -> list[dict]:
+def get_all_documents(user_id: int) -> list[dict]:
     """Return one summary row per indexed document."""
 
     client = _get_qdrant_client()
@@ -277,6 +299,7 @@ def get_all_documents() -> list[dict]:
     # Scroll all points with payload (no vectors needed).
     all_points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
+        scroll_filter=_user_id_filter(user_id),
         with_payload=True,
         with_vectors=False,
         limit=10000,
@@ -311,7 +334,7 @@ def get_all_documents() -> list[dict]:
     )
 
 
-def document_exists(doc_id: str) -> bool:
+def document_exists(user_id: int, doc_id: str) -> bool:
     """Return True when at least one chunk is stored for ``doc_id``."""
 
     client = _get_qdrant_client()
@@ -324,7 +347,7 @@ def document_exists(doc_id: str) -> bool:
 
     points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
-        scroll_filter=_doc_id_filter(doc_id),
+        scroll_filter=_user_doc_id_filter(user_id, doc_id),
         with_payload=False,
         with_vectors=False,
         limit=1,
@@ -332,7 +355,7 @@ def document_exists(doc_id: str) -> bool:
     return bool(points)
 
 
-def count_document_chunks(doc_id: str) -> int:
+def count_document_chunks(user_id: int, doc_id: str) -> int:
     """Return the number of stored chunks for ``doc_id``."""
 
     client = _get_qdrant_client()
@@ -345,7 +368,7 @@ def count_document_chunks(doc_id: str) -> int:
 
     points, _ = client.scroll(
         collection_name=COLLECTION_NAME,
-        scroll_filter=_doc_id_filter(doc_id),
+        scroll_filter=_user_doc_id_filter(user_id, doc_id),
         with_payload=False,
         with_vectors=False,
         limit=10000,
@@ -353,16 +376,16 @@ def count_document_chunks(doc_id: str) -> int:
     return len(points) if points else 0
 
 
-def delete_documents(doc_id: str) -> int:
+def delete_documents(user_id: int, doc_id: str) -> int:
     """Delete every vector belonging to ``doc_id`` and return the count."""
 
     client = _get_qdrant_client()
 
-    deleted_count = count_document_chunks(doc_id)
+    deleted_count = count_document_chunks(user_id, doc_id)
 
     client.delete(
         collection_name=COLLECTION_NAME,
-        points_selector=_doc_id_filter(doc_id),
+        points_selector=_user_doc_id_filter(user_id, doc_id),
     )
 
     logger.info(
@@ -374,7 +397,7 @@ def delete_documents(doc_id: str) -> int:
     return deleted_count
 
 
-def get_document_count() -> int:
+def get_document_count(user_id: int) -> int:
     """Cheap document count for health checks.
 
     Uses Qdrant collection info plus a payload scroll to count unique

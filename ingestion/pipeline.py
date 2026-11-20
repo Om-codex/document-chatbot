@@ -23,6 +23,7 @@ def generate_document_id(file_path: str) -> str:
 
 def ingest_document(
     file_path: str,
+    user_id: int,
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,
 ):
@@ -45,6 +46,7 @@ def ingest_document(
     for index, chunk in enumerate(chunks):
         chunk.metadata.update(
             {
+                "user_id": user_id,
                 "doc_id": doc_id,
                 "filename": path.name,
                 "chunk_index": index,

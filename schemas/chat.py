@@ -14,6 +14,12 @@ class ChatRequest(BaseModel):
         description="Question to ask about the uploaded documents.",
     )
 
+    user_id: int = Field(
+        default = None,
+        ge = 0,
+        description="User ID of current user."
+    )
+
     doc_ids: list[str] | None = Field(
         default=None,
         max_length=settings.max_selected_documents,
@@ -66,6 +72,7 @@ class ChatRequest(BaseModel):
 
 # retrieved chunk metadata schema
 class ChunkMetadata(BaseModel):
+    user_id: int
     doc_id: str
     filename: str
     chunk_index: int

@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from api.errors import api_error
 from schemas.chat import ChatRequest, ChatResponse
@@ -18,6 +18,8 @@ from services.exceptions import (
     NoDocumentsError,
     RetrievalError,
 )
+from database.models import User
+from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +31,9 @@ router = APIRouter(
 
 # Chat endpoint
 @router.post("/", response_model=ChatResponse)
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, current_user: User = Depends(get_current_user)):
     try:
-        return chat_with_documents(request.question, request.doc_ids, request.k)
+        return chat_with_documents(request.question, current_user.id, request.doc_ids, request.k)
 
     except ChatValidationError as exc:
         raise api_error(400, "INVALID_REQUEST", str(exc))

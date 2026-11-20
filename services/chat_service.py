@@ -59,11 +59,11 @@ def _normalize_doc_ids(doc_ids: list[str] | None) -> list[str] | None:
     return cleaned
 
 
-def _ensure_documents_available(doc_ids: list[str] | None) -> None:
+def _ensure_documents_available(user_id: int, doc_ids: list[str] | None) -> None:
     """Fail early with a clear error instead of asking the LLM about nothing."""
 
     try:
-        documents = get_all_documents()
+        documents = get_all_documents(user_id)
     except Exception as exc:
         raise RetrievalError("The document index could not be read.") from exc
 
@@ -84,6 +84,7 @@ def _ensure_documents_available(doc_ids: list[str] | None) -> None:
 
 def chat_with_documents(
     question: str,
+    user_id: int,
     doc_ids: list[str] | None,
     k: int,
 ) -> dict:
@@ -111,7 +112,7 @@ def chat_with_documents(
         len(normalized_doc_ids) if normalized_doc_ids else "all",
     )
 
-    _ensure_documents_available(normalized_doc_ids)
+    _ensure_documents_available(user_id, normalized_doc_ids)
 
     try:
         qa_chain = get_qa_chain(doc_ids=normalized_doc_ids, k=k)

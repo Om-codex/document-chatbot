@@ -43,7 +43,7 @@ MAX_FILE_SIZE = settings.max_file_size_bytes
 READ_CHUNK_SIZE = settings.upload_read_chunk_size
 
 
-def _cleanup_upload(file_path: Path, doc_id: str | None, existed_before: bool) -> None:
+def _cleanup_upload(file_path: Path, user_id: int, doc_id: str | None, existed_before: bool) -> None:
     """Best-effort cleanup after a failed upload.
 
     Vector cleanup is only attempted for a brand-new document.  When replacing
@@ -53,7 +53,7 @@ def _cleanup_upload(file_path: Path, doc_id: str | None, existed_before: bool) -
 
     if doc_id and not existed_before:
         try:
-            delete_documents(doc_id)
+            delete_documents(user_id, doc_id)
             logger.info("Cleaned up partial vectors: doc_id=%s", doc_id[:12])
         except Exception:
             logger.exception("Failed to clean up partial vectors: doc_id=%s", doc_id[:12])
@@ -70,7 +70,7 @@ def _cleanup_upload(file_path: Path, doc_id: str | None, existed_before: bool) -
 # Upload Document
 # -----------------------------------------
 
-def upload_document(filename: str, file_stream: BinaryIO) -> dict:
+def upload_document(user_id: int, filename: str, file_stream: BinaryIO) -> dict:
     """Stream, validate, ingest and index a single uploaded document."""
 
     try:
@@ -145,7 +145,7 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
         # embedding entirely -- this saves Gemini API calls on re-uploads
         # and after rate-limit resets.
         doc_id = generate_document_id(str(file_path))
-        existed_before = document_exists(doc_id)
+        existed_before = document_exists(user_id, doc_id)
 
         if existed_before:
             logger.info(
@@ -165,13 +165,16 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
                 "message": "Document already indexed.",
                 "filename": original_filename,
                 "doc_id": doc_id,
-                "total_chunks": count_document_chunks(doc_id),
+                "total_chunks": count_document_chunks(user_id, doc_id),
                 "file_size_bytes": total_size,
                 "duplicate": True,
             }
 
         try:
-            chunks = ingest_document(str(file_path))
+            chunks = ingest_document(
+                file_path = str(file_path),
+                user_id = user_id
+                )
         except UnsupportedDocumentFormatError as exc:
             raise UnsupportedDocumentError(str(exc)) from exc
         except IngestionEmptyDocumentError as exc:
@@ -185,6 +188,7 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
         # Verify the ingested chunks match the pre-computed doc_id.
         if chunks[0].metadata.get("doc_id") != doc_id:
             raise ValueError("Ingested document ID does not match pre-computed ID.")
+
 
         existed_before = False  # Already confirmed it does not exist above.
 
@@ -223,6 +227,7 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
 
         return {
             "message": "Document uploaded and indexed successfully.",
+            "user_id": user_id,
             "filename": original_filename,
             "doc_id": doc_id,
             "total_chunks": len(chunks),
@@ -235,7 +240,7 @@ def upload_document(filename: str, file_stream: BinaryIO) -> dict:
             original_filename,
             doc_id[:12] if doc_id else "n/a",
         )
-        _cleanup_upload(file_path, doc_id, existed_before)
+        _cleanup_upload(file_path, user_id, doc_id, existed_before)
         raise
 
 
@@ -260,7 +265,7 @@ def list_documents() -> dict:
 # Delete Document
 # -----------------------------------------
 
-def delete_document(doc_id: str) -> dict:
+def delete_document(user_id: int, doc_id: str) -> dict:
     """Delete vectors belonging to ``doc_id``.
 
     Original files are not stored persistently -- they are temporary during
@@ -272,7 +277,7 @@ def delete_document(doc_id: str) -> dict:
     except InvalidDocumentIdFormatError as exc:
         raise InvalidDocumentIdError(str(exc)) from exc
 
-    documents = get_all_documents()
+    documents = get_all_documents(user_id = user_id)
     document = next((item for item in documents if item["doc_id"] == doc_id), None)
 
     if document is None:
@@ -285,7 +290,7 @@ def delete_document(doc_id: str) -> dict:
     )
 
     try:
-        delete_documents(doc_id)
+        delete_documents(user_id, doc_id)
     except Exception as exc:
         logger.exception("Vector deletion failed: doc_id=%s", doc_id[:12])
         raise DocumentDeletionError("Failed to delete the document vectors.") from exc
