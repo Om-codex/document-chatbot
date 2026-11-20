@@ -7,120 +7,211 @@
   <meta name="robots" content="noindex, nofollow" />
   <title>Sign in — Document Chatbot</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=3" />
+  <link rel="stylesheet" href="css/styles.css?v=4" />
   <script src="js/theme.js"></script>
 </head>
 <body>
   <main class="auth-page">
-    <div class="auth-card">
-      <div class="auth-brand">
-        <span class="brand-mark" aria-hidden="true">DC</span>
-        <div>
-          <h1>Document Chatbot</h1>
-          <p class="muted small">Grounded answers from your own files</p>
-        </div>
-      </div>
+    <div class="auth-shell">
+      <!-- -------------------------------------------------------- showcase -->
+      <aside class="auth-showcase">
+        <div class="auth-showcase__glow" aria-hidden="true"></div>
+        <div class="auth-showcase__content">
+          <span class="auth-eyebrow">Private document workspace</span>
+          <h2>Every answer,<br /><span>grounded in your files.</span></h2>
+          <p class="auth-showcase__lede">
+            Add a PDF, Word file or note, then ask questions in plain language.
+            See the passages behind every answer.
+          </p>
 
-      <div id="auth-banner" class="auth-banner" role="status" aria-live="polite" hidden></div>
+          <ul class="auth-perks">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
+              </svg>
+              A library that stays tied to your account
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m4 7 8-4 8 4-8 4-8-4Z" /><path d="m4 12 8 4 8-4" /><path d="m4 17 8 4 8-4" />
+              </svg>
+              Gemini embeddings + Qdrant retrieval
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+              </svg>
+              Source-backed answers, not guesses
+            </li>
+          </ul>
 
-      <!-- ---------------------------------------------------------- login -->
-      <section id="login-section" aria-labelledby="login-heading">
-        <div class="auth-head">
-          <h2 id="login-heading">Welcome back</h2>
-          <p class="muted small">Sign in to open your document library.</p>
-        </div>
-
-        <form id="login-form" class="auth-form" novalidate autocomplete="on">
-          <label class="field" for="login-email">
-            <span>Email address</span>
-            <input id="login-email" name="email" type="email" inputmode="email"
-                   autocomplete="username" placeholder="you@example.com"
-                   required maxlength="254" />
-          </label>
-
-          <div class="password-field">
-            <label class="field" for="login-password">
-              <span>Password</span>
-              <input id="login-password" name="password" type="password"
-                     autocomplete="current-password" placeholder="Your password"
-                     required minlength="8" maxlength="128" />
-            </label>
-            <button class="password-toggle" type="button"
-                    data-password-toggle="login-password"
-                    aria-label="Show password" aria-pressed="false">Show</button>
+          <div class="auth-preview" aria-hidden="true">
+            <div class="auth-preview__head">
+              <span class="auth-preview__dot"></span><span class="auth-preview__dot"></span><span class="auth-preview__dot"></span>
+              <span>Ask your documents</span>
+            </div>
+            <p class="auth-preview__query">What does the report say about Q3?</p>
+            <p class="auth-preview__answer">
+              Q3 revenue grew 18% year over year, driven by...
+            </p>
+            <div class="auth-preview__sources">
+              <span>report.pdf · p.4</span><span>notes.txt · 2 chunks</span>
+            </div>
           </div>
+        </div>
+      </aside>
 
-          <p id="login-error" class="form-error" role="alert" hidden></p>
-
-          <button id="login-submit" class="btn btn--primary auth-submit" type="submit">
-            <span class="btn-label">Sign in</span>
-            <span class="btn-spinner spinner-ring" aria-hidden="true" hidden></span>
+      <!-- ----------------------------------------------------------- form -->
+      <section class="auth-panel" aria-labelledby="auth-title">
+        <header class="auth-panel__head">
+          <a class="auth-logo" href="index.html">
+            <span class="brand-mark" aria-hidden="true">DC</span>
+            <span>Document Chatbot</span>
+          </a>
+          <button id="theme-toggle" class="icon-btn" type="button"
+                  aria-label="Dark mode" aria-pressed="false" title="Switch to dark mode">
+            <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+            </svg>
+            <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+            </svg>
           </button>
-        </form>
+        </header>
 
-        <p class="auth-switch">
-          Don't have an account?
-          <button class="link-button link-text" type="button" data-mode="register">Create one</button>
-        </p>
-      </section>
+        <div class="auth-panel__body">
+          <span class="auth-kicker">Your workspace</span>
+          <h1 id="auth-title" class="auth-title">Sign in to continue</h1>
+          <p class="auth-subtitle">Access your private library and chat with your documents.</p>
 
-      <!-- ------------------------------------------------------ register -->
-      <section id="register-section" aria-labelledby="register-heading" hidden>
-        <div class="auth-head">
-          <h2 id="register-heading">Create your account</h2>
-          <p class="muted small">Private document storage, one account per email.</p>
+          <div class="auth-tabs" role="group" aria-label="Authentication mode">
+            <button class="auth-tab" type="button" data-mode="login" aria-pressed="true">Sign in</button>
+            <button class="auth-tab" type="button" data-mode="register" aria-pressed="false">Create account</button>
+          </div>
+
+          <div id="auth-banner" class="auth-banner" role="status" aria-live="polite" hidden></div>
+
+          <!-- -------------------------------------------------------- login -->
+          <section id="login-section" aria-labelledby="login-heading">
+            <div class="auth-head">
+              <h2 id="login-heading">Welcome back</h2>
+              <p class="muted small">Enter your credentials to pick up where you left off.</p>
+            </div>
+
+            <form id="login-form" class="auth-form" novalidate autocomplete="on">
+              <label class="field auth-field" for="login-email">
+                <span>Email address</span>
+                <span class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" />
+                  </svg>
+                  <input id="login-email" name="email" type="email" inputmode="email"
+                         autocomplete="username" placeholder="you@example.com"
+                         required maxlength="254" />
+                </span>
+              </label>
+
+              <label class="field auth-field password-field" for="login-password">
+                <span>Password</span>
+                <span class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                  </svg>
+                  <input id="login-password" name="password" type="password"
+                         autocomplete="current-password" placeholder="Your password"
+                         required minlength="8" maxlength="128" />
+                  <button class="password-toggle" type="button"
+                          data-password-toggle="login-password"
+                          aria-label="Show password" aria-pressed="false">Show</button>
+                </span>
+              </label>
+
+              <p id="login-error" class="form-error auth-error" role="alert" hidden></p>
+
+              <button id="login-submit" class="btn btn--primary auth-submit" type="submit">
+                <span class="btn-label">Sign in</span>
+                <span class="btn-spinner spinner-ring" aria-hidden="true" hidden></span>
+              </button>
+            </form>
+          </section>
+
+          <!-- ------------------------------------------------------ register -->
+          <section id="register-section" aria-labelledby="register-heading" hidden>
+            <div class="auth-head">
+              <h2 id="register-heading">Create your account</h2>
+              <p class="muted small">Private storage, one account per email address.</p>
+            </div>
+
+            <form id="register-form" class="auth-form" novalidate autocomplete="on">
+              <label class="field auth-field" for="register-email">
+                <span>Email address</span>
+                <span class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" />
+                  </svg>
+                  <input id="register-email" name="email" type="email" inputmode="email"
+                         autocomplete="username" placeholder="you@example.com"
+                         required maxlength="254" />
+                </span>
+              </label>
+
+              <label class="field auth-field password-field" for="register-password">
+                <span>Password</span>
+                <span class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                  </svg>
+                  <input id="register-password" name="password" type="password"
+                         autocomplete="new-password" placeholder="Choose a password"
+                         required minlength="8" maxlength="128" />
+                  <button class="password-toggle" type="button"
+                          data-password-toggle="register-password"
+                          aria-label="Show password" aria-pressed="false">Show</button>
+                </span>
+              </label>
+
+              <label class="field auth-field password-field" for="register-confirm">
+                <span>Confirm password</span>
+                <span class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  <input id="register-confirm" name="confirmPassword" type="password"
+                         autocomplete="new-password" placeholder="Repeat your password"
+                         required minlength="8" maxlength="128" />
+                  <button class="password-toggle" type="button"
+                          data-password-toggle="register-confirm"
+                          aria-label="Show password" aria-pressed="false">Show</button>
+                </span>
+              </label>
+
+              <p class="auth-requirements">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" />
+                </svg>
+                <span>8–128 characters. No other complexity rules.</span>
+              </p>
+              <p id="register-error" class="form-error auth-error" role="alert" hidden></p>
+
+              <button id="register-submit" class="btn btn--primary auth-submit" type="submit">
+                <span class="btn-label">Create account</span>
+                <span class="btn-spinner spinner-ring" aria-hidden="true" hidden></span>
+              </button>
+            </form>
+          </section>
+
+          <p class="auth-footnote">Protected area · Your documents stay tied to your account.</p>
         </div>
 
-        <form id="register-form" class="auth-form" novalidate autocomplete="on">
-          <label class="field" for="register-email">
-            <span>Email address</span>
-            <input id="register-email" name="email" type="email" inputmode="email"
-                   autocomplete="username" placeholder="you@example.com"
-                   required maxlength="254" />
-          </label>
-
-          <div class="password-field">
-            <label class="field" for="register-password">
-              <span>Password</span>
-              <input id="register-password" name="password" type="password"
-                     autocomplete="new-password" placeholder="Choose a password"
-                     required minlength="8" maxlength="128" />
-            </label>
-            <button class="password-toggle" type="button"
-                    data-password-toggle="register-password"
-                    aria-label="Show password" aria-pressed="false">Show</button>
-          </div>
-
-          <div class="password-field">
-            <label class="field" for="register-confirm">
-              <span>Confirm password</span>
-              <input id="register-confirm" name="confirmPassword" type="password"
-                     autocomplete="new-password" placeholder="Repeat your password"
-                     required minlength="8" maxlength="128" />
-            </label>
-            <button class="password-toggle" type="button"
-                    data-password-toggle="register-confirm"
-                    aria-label="Show password" aria-pressed="false">Show</button>
-          </div>
-
-          <p class="auth-requirements">Password requirements: 8–128 characters. No other complexity rules.</p>
-          <p id="register-error" class="form-error" role="alert" hidden></p>
-
-          <button id="register-submit" class="btn btn--primary auth-submit" type="submit">
-            <span class="btn-label">Create account</span>
-            <span class="btn-spinner spinner-ring" aria-hidden="true" hidden></span>
-          </button>
-        </form>
-
-        <p class="auth-switch">
-          Already have an account?
-          <button class="link-button link-text" type="button" data-mode="login">Sign in</button>
-        </p>
+        <a class="site-back auth-home" href="index.html">
+          <span aria-hidden="true">←</span><span>Back to site</span>
+        </a>
       </section>
-
-      <a class="site-back auth-home" href="index.html">
-        <span aria-hidden="true">←</span><span>Back to site</span>
-      </a>
     </div>
   </main>
 

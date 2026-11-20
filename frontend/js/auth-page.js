@@ -158,6 +158,10 @@ function setMode(mode, { focus = true, keepBanner = false } = {}) {
     ? "Sign in — Document Chatbot"
     : "Create account — Document Chatbot";
 
+  for (const button of document.querySelectorAll("[data-mode]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+  }
+
   hideError(dom.loginError);
   hideError(dom.registerError);
   if (!keepBanner) hideBanner();
