@@ -1497,8 +1497,6 @@ button:disabled {
 /* ---------------------------------------------------------------- markdown */
 
 .message-text {
-
-.message-text {
   white-space: pre-wrap; /* preserve line breaks for code blocks */
 }
 
