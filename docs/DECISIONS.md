@@ -6,31 +6,36 @@ this file whenever a decision changes; do not silently drift from the contract.
 Environment verified on 2026-11-03: Windows, Python 3.13.14, venv in
 `document-chatbot/.venv`.
 
+Updated 2026-11-17: ADRs 1, 3, 4, 6 and 7 were revised when embeddings moved from
+local Hugging Face to the Gemini Embedding API and the vector store moved from
+Chroma to Qdrant Cloud.
+
 ---
 
-## ADR-1 — Groq for chat, local Hugging Face embeddings
+## ADR-1 — Groq for chat, Gemini Embedding API for embeddings
 
 **Decision:** `ChatGroq` (`openai/gpt-oss-20b` by default, temperature 0, 2
-retries) for generation; local `sentence-transformers/all-MiniLM-L6-v2`
-(384-dim) through `langchain-huggingface` for embeddings.
+retries) for generation; Google's `gemini-embedding-2` API (768-dim,
+L2-normalized) for embeddings.
 
-**Why:** free chat inference with no card, and embeddings that run offline after a
-one-time ~90 MB download. No second API key, no per-chunk embedding cost, and
-ingestion works without network hiccups.
+**Why:** free chat inference with no card, and embeddings served by a small API
+client with no local model weights. This keeps the deployment within free-tier
+memory limits without shipping ~1 GB of `torch` dependencies.
 
-**Alternatives rejected:** OpenAI for both (paid, one more key); Gemini (different
-SDK, free-tier quota still applies); Ollama (several GB of local models, slower on
-CPU).
+**Alternatives rejected:** OpenAI for both (paid, one more key); local
+`sentence-transformers/all-MiniLM-L6-v2` (the original choice, but heavy and slow
+on CPU); Ollama (several GB of local models, slower on CPU).
 
 **Consequences:**
 - Groq's free tier is 30 req/min, 1,000 req/day, **8K tokens/min**, 200K tokens/day.
   Keep `DEFAULT_TOP_K=3`, chunk size ~1,000 chars, concise answers, and back off on `429`.
 - Llama models left Groq's free tier in Aug 2026; do not default to
   `llama-3.3-70b-versatile`. Use `openai/gpt-oss-20b` or `openai/gpt-oss-120b`.
-- Embedding runs on CPU; ingestion of a large PDF takes seconds. This is why the
-  upload endpoint is synchronous in v1 and why the UI shows an ingestion state.
-- `torch`/`sentence-transformers` add ~1 GB to the venv. Verified installable on
-  Python 3.13 with `torch 2.15`.
+- The Gemini Embedding free tier is limited to 100 requests/minute. Batching
+  (`EMBEDDING_BATCH_SIZE`) and retries with backoff are implemented in
+  `embeddings/gemini_embedding.py`; rapid large uploads can still hit a quota.
+- Uploads remain synchronous in v1: embedding happens during the request, so the
+  UI shows an ingestion state.
 
 ---
 
@@ -61,26 +66,26 @@ available next to the parsed answer. `langchain-community` still pulls
 
 ---
 
-## ADR-3 — Chroma distance metric and normalized embeddings
+## ADR-3 — Qdrant cosine distance and normalized embeddings
 
-**Decision:** embed with `normalize_embeddings=True` and let Chroma create the
-collection with its default (L2) index. Retrieval uses LangChain's `similarity`
-search; the API returns the retrieved chunks themselves and does **not** expose a
-distance or score.
+**Decision:** embed with `NORMALIZE_EMBEDDINGS=true` and create the Qdrant
+collection with `Distance.COSINE` and 768 dimensions. Retrieval uses LangChain's
+`similarity` search; the API returns the retrieved chunks themselves and does
+**not** expose a distance or score.
 
-**Why:** normalizing vectors keeps retrieval stable across models, and the UI only
-needs the passage plus its metadata to cite it. Exposing a raw Chroma distance
-without a documented metric caused confusion in the original contract (it assumed
-cosine similarity and a `score` field that the implementation never produced).
+**Why:** normalizing vectors keeps retrieval stable and matches the Cosine metric,
+and the UI only needs the passage plus its metadata to cite it. Exposing an
+undocumented raw distance previously caused confusion in the contract.
 
 **Consequences:**
-- The distance space is fixed when the collection is created. Changing
-  `EMBEDDING_MODEL_NAME` changes vector dimensions; use a new
-  `CHROMA_COLLECTION_NAME` or re-ingest into a fresh directory.
-- If a similarity score is added later, convert distance once in
+- Vector size and distance are fixed when the collection is created. Changing
+  `GEMINI_EMBEDDING_MODEL` or `EMBEDDING_DIMENSIONS` requires a new
+  `QDRANT_COLLECTION_NAME` and re-ingestion.
+- If a similarity score is added later, interpret it once in
   `retrieval/retriever.py` and document the metric; do not let the UI compare
   mixed metrics.
-- Disable Chroma telemetry (`Settings(anonymized_telemetry=False)`) for a local app.
+- Qdrant point IDs must be UUIDs, so chunk IDs are mapped with `uuid5` while the
+  original `{doc_id}_{chunk_index}` strings remain in payload and API responses.
 
 ---
 
@@ -99,8 +104,9 @@ Deterministic IDs also make deletion and test assertions trivial.
   chunks instead of adding duplicates.
 - Chunk IDs are stable only while `CHUNK_SIZE`/`CHUNK_OVERLAP` are unchanged. Changing
   them changes chunk boundaries; re-ingest the document.
-- Metadata must carry `doc_id` so subset filtering (`where={"doc_id": {"$in": [...]}}`)
-  and document deletion work.
+- Metadata must carry `doc_id` so subset filtering
+  (`FieldCondition(key="metadata.doc_id", match=MatchAny(...))`) and document
+  deletion work.
 
 ---
 
@@ -120,35 +126,37 @@ numbers survive.
 
 ---
 
-## ADR-6 — Chroma `PersistentClient`, single worker in development
+## ADR-6 — Qdrant Cloud collection, single worker
 
-**Decision:** use local persistent Chroma at `CHROMA_PERSIST_DIRECTORY`; run uvicorn
-with one worker (`--workers 1`) during development.
+**Decision:** use a hosted Qdrant Cloud collection (`QDRANT_URL` plus
+`QDRANT_API_KEY`); run uvicorn with one worker (`--workers 1`) in `render.yaml`.
 
-**Why:** Chroma's local mode is SQLite-backed. Multiple processes writing the same
-directory can produce lock errors or corruption. One process is plenty for a
-single-user learning app.
+**Why:** a managed vector store removes local SQLite locking/corruption concerns
+and works on hosts with ephemeral filesystems. One process is plenty for a
+single-user learning app and keeps the process-local caches (ADR-7) simple.
 
-**Consequences:** `--reload` is fine (it restarts the process). For deployment, move
-to a Chroma server or an external vector DB and remove the single-worker constraint.
-A stale lock after a crash is usually solved by closing other Python processes; if
-the database is disposable, delete `chroma_db/` and re-ingest.
+**Consequences:** `--reload` is fine locally (it restarts the process). Extra
+workers would each create their own Qdrant and embedding clients — safe for reads,
+but needlessly duplicating connections. The collection is created on first access;
+changing its name requires re-ingestion.
 
 ---
 
 ## ADR-7 — Lazy, process-local caches for expensive services
 
-**Decision:** cache the embedding model, Chroma wrapper, and LLM with `lru_cache`
-factories instead of building them per request. The `lifespan` handler logs startup
-configuration and warns when `GROQ_API_KEY` is missing; it does not load models.
+**Decision:** cache the Gemini embedding client, Qdrant store wrapper, and LLM with
+`lru_cache` factories instead of building them per request. The `lifespan` handler
+logs startup configuration and warns when `GROQ_API_KEY` is missing; it does not
+initialize clients.
 
-**Why:** `HuggingFaceEmbeddings` loads the model into memory and Chroma opens a
-SQLite file. Doing that per request would be slow and leak resources, while loading
-them at import time makes health checks and tests unnecessarily heavy.
+**Why:** creating API clients and opening connections per request would be slow and
+leak resources, while doing it at import time makes health checks and tests
+unnecessarily heavy.
 
-**Consequences:** the first upload/chat pays the model-load cost; `/api/health`
-stays cheap because it reads Chroma without embeddings. Tests clear the caches
-between cases and monkeypatch the factories with fakes.
+**Consequences:** the first upload/chat pays client-initialization cost;
+`/api/health` stays cheap because it reads Qdrant without embeddings. Tests clear
+the caches between cases and patch the Qdrant client with an in-memory instance plus
+fake embeddings and LLM.
 
 ---
 

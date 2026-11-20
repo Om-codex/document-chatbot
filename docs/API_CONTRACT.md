@@ -75,8 +75,8 @@ Cheap readiness check; does not load the embedding model or call the LLM.
   "app_name": "Document Chatbot API",
   "app_version": "1.0.0",
   "llm_model": "openai/gpt-oss-20b",
-  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-  "collection": "document_collection_v2",
+  "embedding_model": "gemini-embedding-2",
+  "collection": "document_collection_v2_gemini",
   "document_count": 1
 }
 ```
@@ -226,7 +226,7 @@ Response `200`:
 | Trash icon | `DELETE /api/documents/{doc_id}` |
 | "All documents" scope | `POST /api/chat/` with `doc_ids: null` |
 | Specific selection | `POST /api/chat/` with `doc_ids: [...]` |
-| Sources selector | `POST /api/chat/` with `k: 1..10` |
+| Sources selector | `POST /api/chat/` with `k: 1..20` |
 
 The UI uses the real API by default. Append `?mock=1` to use
 `frontend/js/mock.js` without a backend; `?apiBase=http://127.0.0.1:8000` points a
