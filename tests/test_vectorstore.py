@@ -10,7 +10,7 @@ from vectorstore.qdrant_store import (
     delete_documents,
     document_exists,
     get_all_documents,
-    get_document_count,
+    is_collection_available,
 )
 
 
@@ -41,7 +41,7 @@ def test_add_and_list_documents(isolated_storage):
     assert documents[0]["total_chunks"] == 3
     assert document_exists("a" * 64)
     assert count_document_chunks("a" * 64) == 3
-    assert get_document_count() == 1
+    assert is_collection_available()
 
 
 def test_replacing_with_fewer_chunks_removes_stale_chunks(isolated_storage):

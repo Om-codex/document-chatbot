@@ -397,34 +397,16 @@ def delete_documents(user_id: int, doc_id: str) -> int:
     return deleted_count
 
 
-def get_document_count(user_id: int) -> int:
-    """Cheap document count for health checks.
+def is_collection_available() -> bool:
+    """Cheap readiness check for the health endpoint.
 
-    Uses Qdrant collection info plus a payload scroll to count unique
-    ``doc_id`` values without loading the embedding model.
+    Only verifies that the Qdrant collection is reachable. It does not scroll
+    payloads or expose document data: document counts are per-user and belong
+    to the authenticated ``GET /api/documents/`` response.
     """
 
-    client = _get_qdrant_client()
-
     try:
-        client.get_collection(COLLECTION_NAME)
+        _get_qdrant_client().get_collection(COLLECTION_NAME)
+        return True
     except Exception:
-        return 0
-
-    try:
-        points, _ = client.scroll(
-            collection_name=COLLECTION_NAME,
-            with_payload=True,
-            with_vectors=False,
-            limit=10000,
-        )
-    except Exception:
-        return 0
-
-    doc_ids = {
-        (point.payload or {}).get("metadata", {}).get("doc_id")
-        for point in (points or [])
-        if (point.payload or {}).get("metadata", {}).get("doc_id")
-    }
-
-    return len(doc_ids)
+        return False

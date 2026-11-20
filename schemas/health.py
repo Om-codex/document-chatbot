@@ -8,4 +8,3 @@ class HealthResponse(BaseModel):
     llm_model: str
     embedding_model: str
     collection: str
-    document_count: int | None = None

@@ -263,7 +263,7 @@ function renderHealth() {
   dom.healthPill.textContent = isMock ? "Mock mode" : degraded ? "Degraded" : "Connected";
   dom.healthPill.title =
     `LLM: ${state.health.llm_model}\nEmbeddings: ${state.health.embedding_model}` +
-    `\nCollection: ${state.health.collection}\nDocuments: ${state.health.document_count}`;
+    `\nCollection: ${state.health.collection}`;
 }
 
 function renderHealthError(error) {

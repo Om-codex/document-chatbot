@@ -22,7 +22,7 @@ def test_health_endpoint(client, indexed_txt):
     assert payload["llm_model"]
     assert payload["embedding_model"]
     assert payload["collection"]
-    assert payload["document_count"] == 1
+    assert "document_count" not in payload
 
 
 def test_validation_errors_have_a_stable_shape(client):

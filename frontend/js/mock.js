@@ -158,7 +158,6 @@ export function createMockApi() {
         llm_model: "mock / openai/gpt-oss-20b",
         embedding_model: "mock / gemini-embedding-2",
         collection: "mock_collection",
-        document_count: documents.length,
       };
     },
 

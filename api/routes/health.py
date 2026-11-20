@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from schemas.health import HealthResponse
 from config.settings import settings
-from vectorstore.qdrant_store import get_document_count
+from vectorstore.qdrant_store import is_collection_available
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,11 @@ router = APIRouter(
 def health():
     """Cheap readiness check. Does not load the embedding model or call the LLM."""
 
-    document_count: int | None = None
     status = "ok"
 
     try:
-        document_count = get_document_count()
+        if not is_collection_available():
+            status = "degraded"
     except Exception:
         logger.exception("Health check could not read the vector store.")
         status = "degraded"
@@ -34,5 +34,4 @@ def health():
         "llm_model": settings.llm_model,
         "embedding_model": settings.gemini_embedding_model,
         "collection": settings.qdrant_collection_name,
-        "document_count": document_count,
     }

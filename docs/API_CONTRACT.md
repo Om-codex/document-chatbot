@@ -67,7 +67,12 @@ files sequentially and reports failures per file.
 
 ## 2. `GET /api/health`
 
-Cheap readiness check; does not load the embedding model or call the LLM.
+Public, cheap readiness check; does not load the embedding model or call the LLM.
+It only verifies that the Qdrant collection is reachable (`status` is `ok` or
+`degraded`). It is deliberately unauthenticated so the frontend can poll it
+before login and monitoring services can check liveness. Document counts are
+per-user and are returned by the authenticated `GET /api/documents/` response
+as `total_documents`.
 
 ```json
 {
@@ -76,8 +81,7 @@ Cheap readiness check; does not load the embedding model or call the LLM.
   "app_version": "1.0.0",
   "llm_model": "openai/gpt-oss-20b",
   "embedding_model": "gemini-embedding-2",
-  "collection": "document_collection_v2_gemini",
-  "document_count": 1
+  "collection": "document_collection_v2_gemini"
 }
 ```
 
