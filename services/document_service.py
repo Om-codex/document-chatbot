@@ -248,10 +248,10 @@ def upload_document(user_id: int, filename: str, file_stream: BinaryIO) -> dict:
 # List Documents
 # -----------------------------------------
 
-def list_documents() -> dict:
+def list_documents(user_id: int) -> dict:
     """Return summaries for every indexed document."""
 
-    documents = get_all_documents()
+    documents = get_all_documents(user_id)
 
     logger.debug("Document listing requested: count=%d", len(documents))
 
