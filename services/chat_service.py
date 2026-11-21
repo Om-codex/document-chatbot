@@ -115,7 +115,11 @@ def chat_with_documents(
     _ensure_documents_available(user_id, normalized_doc_ids)
 
     try:
-        qa_chain = get_qa_chain(doc_ids=normalized_doc_ids, k=k)
+        qa_chain = get_qa_chain(
+            doc_ids=normalized_doc_ids,
+            k=k,
+            user_id=user_id,
+        )
     except LLMError:
         raise
     except Exception as exc:
@@ -158,6 +162,7 @@ def chat_with_documents(
                 "chunk_id": f"{doc_id}_{chunk_index}",
                 "content": document.page_content,
                 "metadata": {
+                    "user_id": user_id,
                     "doc_id": doc_id,
                     "filename": metadata.get("filename") or "Unknown",
                     "chunk_index": int(chunk_index),
