@@ -45,13 +45,20 @@ def _answer_question(payload: dict, prompt, llm) -> dict:
     return {"answer": answer, "sources": documents}
 
 
-def get_qa_chain(doc_ids: list[str] | None = None, k: int = 3):
-    """Build the LCEL retrieval + answer chain."""
+def get_qa_chain(
+    doc_ids: list[str] | None = None,
+    k: int = 3,
+    user_id: int | None = None,
+):
+    """Build the LCEL retrieval + answer chain.
+
+    ``user_id`` scopes retrieval to the authenticated user's chunks.
+    """
 
     if doc_ids is not None and not doc_ids:
         raise ValueError("doc_ids cannot be an empty list")
 
-    retriever = get_retriever(k=k, doc_ids=doc_ids)
+    retriever = get_retriever(k=k, doc_ids=doc_ids, user_id=user_id)
     prompt = get_rag_prompt()
     llm = get_llm()
 
