@@ -4,9 +4,11 @@ Replaces the local sentence-transformers model with the Gemini Embedding API.
 Produces 768-dimensional vectors via ``gemini-embedding-2``.
 
 Inputs are sent as separate ``types.Content`` objects (one per text) to
-guarantee a one-to-one mapping between inputs and embeddings.  Large lists
-are split into configurable batches and processed sequentially to avoid
-unbounded concurrent API requests.
+guarantee a one-to-one mapping between inputs and embeddings.  Retrieval task
+instructions are added to the prompt text because ``gemini-embedding-2`` does
+not support the ``task_type`` config field.  Large lists are split into
+configurable batches and processed sequentially to avoid unbounded concurrent
+API requests.
 """
 
 import logging
@@ -22,14 +24,18 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# ``gemini-embedding-2`` does not support ``task_type``; retrieval task
+# instructions belong in the prompt instead (Google Embeddings API docs).
+DOCUMENT_PROMPT_PREFIX = "title: none | text: "
+QUERY_PROMPT_PREFIX = "task: question answering | query: "
+
 
 class GeminiEmbedding(Embeddings):
     """LangChain-compatible embeddings backed by Google Gemini Embedding API.
 
-    Uses ``gemini-embedding-2`` with 768-dimensional output.  Document and
-    query embeddings use distinct ``task_type`` values
-    (``RETRIEVAL_DOCUMENT`` / ``RETRIEVAL_QUERY``) as recommended by the
-    Gemini Embedding API for retrieval use cases.
+    Uses ``gemini-embedding-2`` with 768-dimensional output.  Documents and
+    queries are prefixed with the retrieval instructions recommended for this
+    model because its API does not accept a ``task_type`` config field.
     """
 
     def __init__(
@@ -99,15 +105,15 @@ class GeminiEmbedding(Embeddings):
 
         for start in range(0, len(texts), self.batch_size):
             batch = texts[start : start + self.batch_size]
-            batch_embeddings = self._embed_batch(batch, task_type="RETRIEVAL_DOCUMENT")
+            batch_embeddings = self._embed_batch(batch, DOCUMENT_PROMPT_PREFIX)
             all_embeddings.extend(batch_embeddings)
 
         return all_embeddings
 
     def embed_query(self, text: str) -> list[float]:
-        """Embed a single query text using the query task type."""
+        """Embed a single query text using the retrieval query prompt prefix."""
 
-        embeddings = self._embed_batch([text], task_type="RETRIEVAL_QUERY")
+        embeddings = self._embed_batch([text], QUERY_PROMPT_PREFIX)
         return embeddings[0]
 
     # ------------------------------------------------------------------
@@ -117,16 +123,19 @@ class GeminiEmbedding(Embeddings):
     def _embed_batch(
         self,
         texts: list[str],
-        task_type: str,
+        prompt_prefix: str,
     ) -> list[list[float]]:
         """Embed a single batch with retries and exponential backoff.
 
         Each text is wrapped in its own ``types.Content`` object so the API
-        returns exactly one embedding per input.
+        returns exactly one embedding per input.  The retrieval instruction is
+        included in every text because ``task_type`` is unsupported by this
+        model.
         """
 
         contents = [
-            types.Content(parts=[types.Part(text=text)]) for text in texts
+            types.Content(parts=[types.Part(text=f"{prompt_prefix}{text}")])
+            for text in texts
         ]
 
         last_exception: Exception | None = None
@@ -137,7 +146,6 @@ class GeminiEmbedding(Embeddings):
                     model=self.model,
                     contents=contents,
                     config=types.EmbedContentConfig(
-                        task_type=task_type,
                         output_dimensionality=self.dimensions,
                     ),
                 )
