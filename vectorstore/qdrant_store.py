@@ -15,6 +15,7 @@ from functools import lru_cache
 
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http.models import (
     Distance,
     FieldCondition,
@@ -92,39 +93,54 @@ def _get_qdrant_client() -> QdrantClient:
     )
 
 
-def _ensure_collection(client: QdrantClient) -> None:
-    """Create the Qdrant collection if it does not exist yet.
+def _ensure_payload_indexes(client: QdrantClient) -> None:
+    """Ensure the payload indexes required by per-user metadata filters."""
 
-    The collection is created with ``VECTOR_SIZE`` dimensions and the
-    configured distance metric (Cosine for normalized embeddings).
-    A payload index on ``metadata.doc_id`` is always ensured so that
-    metadata filtering works even when the collection already exists.
+    indexes = (
+        ("metadata.user_id", "integer"),
+        ("metadata.doc_id", "keyword"),
+    )
+
+    for field_name, field_schema in indexes:
+        try:
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field_name,
+                field_schema=field_schema,
+                wait=True,
+            )
+            logger.info(
+                "Ensured payload index on %s for collection %s",
+                field_name,
+                COLLECTION_NAME,
+            )
+        except Exception as exc:
+            if getattr(exc, "status_code", None) == 409:
+                continue
+            logger.warning(
+                "Could not create payload index on %s: %s",
+                field_name,
+                exc,
+            )
+
+
+def _ensure_collection(client: QdrantClient) -> None:
+    """Create the collection if needed and always ensure payload indexes.
+
+    A collection lookup can transiently fail on Qdrant Cloud.  In that case we
+    still attempt creation, but a ``409 Already exists`` response is treated as
+    success instead of failing the upload.
     """
 
     try:
-        collections = client.get_collections().collections
-        if any(c.name == COLLECTION_NAME for c in collections):
-            # Collection already exists — ensure payload index exists.
-            try:
-                client.create_payload_index(
-                    collection_name=COLLECTION_NAME,
-                    field_name="metadata.doc_id",
-                    field_schema="keyword",
-                )
-                logger.info(
-                    "Created payload index on metadata.doc_id for collection %s",
-                    COLLECTION_NAME,
-                )
-            except Exception as exc:
-                # Index may already exist (409) — that's fine.  Log a warning
-                # so the operator knows filtering may not work without it.
-                logger.warning(
-                    "Could not create payload index on metadata.doc_id: %s",
-                    exc,
-                )
+        if client.collection_exists(COLLECTION_NAME):
+            _ensure_payload_indexes(client)
             return
-    except Exception:
-        logger.debug("Could not list collections; will attempt creation.")
+    except Exception as exc:
+        logger.warning(
+            "Qdrant collection lookup failed; will retry via create: %s",
+            exc,
+        )
 
     distance = (
         Distance.COSINE
@@ -132,24 +148,26 @@ def _ensure_collection(client: QdrantClient) -> None:
         else Distance.DOT
     )
 
-    logger.info(
-        "Creating Qdrant collection %s (%d-dim, %s)",
-        COLLECTION_NAME,
-        VECTOR_SIZE,
-        settings.qdrant_distance,
-    )
+    try:
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(size=VECTOR_SIZE, distance=distance),
+        )
+        logger.info(
+            "Created Qdrant collection %s (%d-dim, %s)",
+            COLLECTION_NAME,
+            VECTOR_SIZE,
+            settings.qdrant_distance,
+        )
+    except UnexpectedResponse as exc:
+        if exc.status_code != 409:
+            raise
+        logger.info(
+            "Qdrant collection %s already exists; continuing.",
+            COLLECTION_NAME,
+        )
 
-    client.create_collection(
-        collection_name=COLLECTION_NAME,
-        vectors_config=VectorParams(size=VECTOR_SIZE, distance=distance),
-    )
-
-    # Create a payload index on metadata.doc_id so metadata filtering works.
-    client.create_payload_index(
-        collection_name=COLLECTION_NAME,
-        field_name="metadata.doc_id",
-        field_schema="keyword",
-    )
+    _ensure_payload_indexes(client)
 
 
 @lru_cache(maxsize=1)
