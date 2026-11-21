@@ -16,6 +16,7 @@ from api.routes.health import router as health_router
 from api.routes.auth import router as auth_router
 from api.routes.admin import router as admin_router
 from config.settings import settings
+from database.init_db import init_database
 from utils.logging_config import configure_logging
 
 configure_logging(settings.log_level)
@@ -32,6 +33,14 @@ async def lifespan(_: FastAPI):
         settings.gemini_embedding_model,
         settings.qdrant_collection_name,
     )
+
+    try:
+        init_database()
+        logger.info("Database initialized.")
+    except Exception:
+        logger.exception(
+            "Database initialization failed. DB-backed requests may fail until it succeeds."
+        )
 
     if settings.groq_api_key is None:
         logger.warning(
@@ -76,6 +85,40 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
             )
 
 
+class ExceptionHandlingMiddleware(BaseHTTPMiddleware):
+    """Return the standard error envelope for uncaught route failures.
+
+    This middleware is registered inside CORSMiddleware so error responses still
+    carry Access-Control-Allow-Origin for browser clients. The previous global
+    exception handler ran outside CORS, which made browsers report a network
+    failure instead of showing the real HTTP error.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            logger.exception("Unhandled application error.", exc_info=exc)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "detail": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "An internal server error occurred.",
+                    }
+                },
+            )
+
+
+# Starlette builds the middleware stack in reverse registration order, so add
+# the innermost handlers first and CORS last. That makes CORS wrap timeout and
+# error responses as well, instead of leaving them without browser headers.
+app.add_middleware(ExceptionHandlingMiddleware)
+app.add_middleware(
+    RequestTimeoutMiddleware,
+    timeout_seconds=settings.http_request_timeout_seconds,
+)
+
 # configure CORS (needed only when the frontend is served from another origin)
 # In production, set CORS_ALLOW_ORIGINS to the exact Cloudflare frontend origin
 # (e.g. https://document-chatbot.omm512462.workers.dev) instead of "*".
@@ -86,12 +129,6 @@ app.add_middleware(
     allow_credentials=not allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
-)
-
-# Request timeout middleware (after CORS)
-app.add_middleware(
-    RequestTimeoutMiddleware,
-    timeout_seconds=settings.http_request_timeout_seconds,
 )
 
 
@@ -107,22 +144,6 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
                 "code": "VALIDATION_ERROR",
                 "message": "The request body or parameters are invalid.",
                 "details": errors,
-            }
-        },
-    )
-
-
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(_: Request, exc: Exception):
-    """Last-resort handler: log the traceback server-side, return a safe message."""
-
-    logger.exception("Unhandled application error.", exc_info=exc)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": {
-                "code": "INTERNAL_ERROR",
-                "message": "An internal server error occurred.",
             }
         },
     )
