@@ -132,10 +132,14 @@ def test_embed_query_returns_768_dimensions():
     assert len(result) == 768
     assert all(v == 0.5 for v in result)
 
-    # Verify task_type is RETRIEVAL_QUERY
+    # ``gemini-embedding-2`` uses prompt instructions instead of task_type.
     call_kwargs = fake_client.models.embed_content.call_args.kwargs
-    assert call_kwargs["config"].task_type == "RETRIEVAL_QUERY"
+    assert call_kwargs["config"].task_type is None
     assert call_kwargs["config"].output_dimensionality == 768
+    assert (
+        call_kwargs["contents"][0].parts[0].text
+        == "task: question answering | query: What is caching?"
+    )
 
 
 def test_embed_query_uses_separate_content_object():
@@ -147,7 +151,10 @@ def test_embed_query_uses_separate_content_object():
     call_kwargs = fake_client.models.embed_content.call_args.kwargs
     contents = call_kwargs["contents"]
     assert len(contents) == 1
-    assert contents[0].parts[0].text == "hello world"
+    assert (
+        contents[0].parts[0].text
+        == "task: question answering | query: hello world"
+    )
 
 
 # ------------------------------------------------------------------
@@ -167,7 +174,11 @@ def test_embed_documents_returns_n_vectors():
     assert result[1] == [0.2] * 768
 
     call_kwargs = fake_client.models.embed_content.call_args.kwargs
-    assert call_kwargs["config"].task_type == "RETRIEVAL_DOCUMENT"
+    assert call_kwargs["config"].task_type is None
+    assert (
+        call_kwargs["contents"][0].parts[0].text
+        == "title: none | text: doc one"
+    )
 
 
 def test_embed_documents_empty_list_returns_empty():
@@ -197,9 +208,11 @@ def test_embed_documents_batching_preserves_order():
         assert vec == expected[i], f"Mismatch at index {i}"
     assert fake_client.models.embed_content.call_count == 3
 
-    # Verify each batch used RETRIEVAL_DOCUMENT
+    # Each batch uses prompt prefixes instead of the unsupported task_type.
     for call in fake_client.models.embed_content.call_args_list:
-        assert call.kwargs["config"].task_type == "RETRIEVAL_DOCUMENT"
+        assert call.kwargs["config"].task_type is None
+        for content in call.kwargs["contents"]:
+            assert content.parts[0].text.startswith("title: none | text: ")
 
 
 def test_embed_documents_each_input_gets_own_content_object():
@@ -220,9 +233,9 @@ def test_embed_documents_each_input_gets_own_content_object():
         "contents"
     ]
     assert len(first_contents) == 1
-    assert first_contents[0].parts[0].text == "first"
+    assert first_contents[0].parts[0].text == "title: none | text: first"
     assert len(second_contents) == 1
-    assert second_contents[0].parts[0].text == "second"
+    assert second_contents[0].parts[0].text == "title: none | text: second"
 
 
 # ------------------------------------------------------------------
