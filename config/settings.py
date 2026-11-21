@@ -1,3 +1,5 @@
+import os
+
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, SecretStr
@@ -120,10 +122,11 @@ class Settings(BaseSettings):
     # Database Configuration
     # -------------------------------------
 
-    database_url: str = (
+    # Use the environment variable if it exists, otherwise fall back to local SQLite for testing
+    database_url: str = os.getenv(
+        "DATABASE_URL", 
         f"sqlite:///{(BASE_DIR / 'data' / 'users.db').as_posix()}"
     )
-
     # -------------------------------------
     # JWT Authentication Configuration
     # -------------------------------------
