@@ -198,6 +198,16 @@
           <article class="feature-card" data-reveal>
             <div class="feature-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /><path d="M12 14v3" />
+              </svg>
+            </div>
+            <h3>Private by account</h3>
+            <p>Sign in with a JWT, then upload and query your own library. Every vector is filtered by your user ID in Qdrant Cloud.</p>
+          </article>
+
+          <article class="feature-card" data-reveal>
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h4" />
               </svg>
             </div>
@@ -242,7 +252,7 @@
               </svg>
             </div>
             <h3>A library that survives restarts</h3>
-            <p>Vectors live in Qdrant Cloud. Content-based SHA-256 IDs make re-uploading the same file safe rather than duplicated.</p>
+            <p>Vectors live in Qdrant Cloud and are filtered by your account. Content-based SHA-256 IDs make re-uploading the same file safe rather than duplicated.</p>
           </article>
         </div>
       </div>
@@ -340,10 +350,26 @@
           <div class="tech-card" data-reveal>
             <span class="tech-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
+              </svg>
+            </span>
+            <span><strong>JWT auth</strong><span>PyJWT + pwdlib, Argon2 hashes</span></span>
+          </div>
+          <div class="tech-card" data-reveal>
+            <span class="tech-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
               </svg>
             </span>
-            <span><strong>Qdrant Cloud</strong><span>Persistent vector collection (768-dim)</span></span>
+            <span><strong>Qdrant Cloud</strong><span>Per-user filtered vectors (768-dim)</span></span>
+          </div>
+          <div class="tech-card" data-reveal>
+            <span class="tech-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+              </svg>
+            </span>
+            <span><strong>Neon PostgreSQL</strong><span>SQLAlchemy + psycopg v3 user store</span></span>
           </div>
           <div class="tech-card" data-reveal>
             <span class="tech-icon">
@@ -387,7 +413,7 @@
           </div>
         </div>
 
-        <p class="tech-note">Chat generation uses the Groq API; document embeddings come from the Google Gemini Embedding API. No API keys are exposed to the browser.</p>
+        <p class="tech-note">Chat generation uses the Groq API, embeddings come from the Google Gemini Embedding API, vectors live in Qdrant Cloud and accounts live in Neon PostgreSQL. No API keys or passwords are exposed to the browser.</p>
       </div>
     </section>
 
@@ -396,10 +422,10 @@
       <div class="container">
         <div class="cta-band" data-reveal>
           <h2>Ready to Explore Your Documents?</h2>
-          <p>Open the chatbot and upload your first file, or take the guided tour first to see exactly how retrieval and generation fit together.</p>
+          <p>Sign in and upload your first file, or take the guided tour first to see exactly how authentication, retrieval and generation fit together.</p>
           <div class="cta-band__actions">
-            <a class="btn btn--primary" href="chat.html">
-              Open Chatbot
+            <a class="btn btn--primary" href="login.html">
+              Sign In / Open Chatbot
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M5 12h14M13 6l6 6-6 6" />
               </svg>
