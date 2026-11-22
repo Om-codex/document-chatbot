@@ -2,7 +2,7 @@
  * Tour A — Under the Hood: How This RAG Engine Works.
  *
  * Every technical claim in this file is taken from the actual backend source:
- * `ingestion/`, `embeddings/`, `vectorstore/chroma_store.py`,
+ * `auth/`, `database/`, `ingestion/`, `embeddings/`, `vectorstore/qdrant_store.py`,
  * `retrieval/retriever.py`, `chains/`, `generation/llm.py`,
  * `services/chat_service.py` and `config/settings.py`.
  *
@@ -41,15 +41,15 @@ export const ragTour = {
       title: "Upload reaches the API",
       visual: "upload",
       summary:
-        "The browser sends the file as multipart form data to POST /api/documents/upload. FastAPI receives it as an UploadFile and hands the stream to the document service.",
+        "The signed-in browser sends the file as multipart form data to POST /api/documents/upload with Authorization: Bearer <token>. The browser leaves Content-Type unset so the multipart boundary is generated correctly.",
       what:
-        "The upload endpoint validates the extension, streams the file to a per-upload directory, enforces the size limit while writing, and checks the file signature before any parsing happens.",
+        "FastAPI validates the JWT, resolves the user, receives the file as an UploadFile, validates the extension, streams it to a per-upload temporary directory, enforces the size limit while writing, and checks the file signature before parsing.",
       why:
-        "Streaming avoids holding a whole file in memory, and validating before ingestion means an oversized or mislabelled file is rejected before it can leave partial vectors behind.",
+        "The Bearer token ties the upload to one account. Streaming avoids holding a whole file in memory, and validating before ingestion means an oversized or mislabelled file is rejected before it can leave partial vectors behind.",
       tech:
-        "FastAPI + python-multipart. The service sanitises the filename, allows .pdf, .txt and .docx, and caps uploads at 10 MB.",
-      input: "One multipart file field from the browser.",
-      output: "A validated file on disk plus a JSON response with doc_id, chunk count and size.",
+        "FastAPI + python-multipart + JWT dependency. The service sanitises the filename, allows .pdf, .txt and .docx, and caps uploads at 10 MB.",
+      input: "One multipart file field plus the signed-in user's Bearer token.",
+      output: "A validated temporary file plus a JSON response with doc_id, chunk count and size.",
       next:
         "The saved file path is passed to the ingestion pipeline, which chooses a loader based on the extension.",
     },
@@ -95,17 +95,17 @@ export const ragTour = {
       title: "Stable IDs and chunk metadata",
       visual: "metadata",
       summary:
-        "The document ID is a SHA-256 hash of the file bytes. Every chunk is tagged with that ID, the filename and its chunk index.",
+        "The document ID is a SHA-256 hash of the file bytes. Every chunk is tagged with that ID, the filename, its chunk index and the authenticated user_id.",
       what:
-        "Because the ID is derived from content, re-uploading the same file produces the same doc_id. New chunks are upserted by deterministic chunk IDs, and only stale trailing chunks are removed.",
+        "Because the ID is derived from content, re-uploading the same file produces the same doc_id. New chunks are upserted by deterministic chunk IDs that include the owner, and only stale trailing chunks are removed.",
       why:
-        "Content-based IDs prevent accidental duplicates and make replacement predictable. Upsert-then-prune also means a failed update does not delete the previously working version first.",
+        "Content-based IDs prevent accidental duplicates, and user_id makes ownership part of the vector itself. Upsert-then-prune also means a failed update does not delete the previously working version first.",
       tech:
-        "hashlib SHA-256 for the document ID; chunk IDs combine the document ID with the chunk index.",
-      input: "Split chunks plus the original filename.",
-      output: "Chunks with doc_id, filename and chunk_index metadata.",
+        "hashlib SHA-256 for the document ID; chunk IDs combine the owner, document ID and chunk index.",
+      input: "Split chunks, the original filename and the authenticated user_id.",
+      output: "Chunks with user_id, doc_id, filename and chunk_index metadata.",
       next:
-        "The chunk text is converted into vectors by the local embedding model.",
+        "The chunk text is converted into vectors by the Gemini Embedding API.",
     },
     {
       id: "embeddings",
@@ -113,31 +113,31 @@ export const ragTour = {
       title: "Google Gemini Embedding API",
       visual: "embeddings",
       summary:
-        "Each chunk is embedded via Google Gemini Embedding API (<code>gemini-embedding-2</code>), producing 768-dimensional vectors.",
+        "Each chunk is embedded via the Google Gemini Embedding API (gemini-embedding-2), producing 768-dimensional vectors.",
       what:
         "The chunk text is sent to the Gemini Embedding API. Vectors are normalized and sent to Qdrant Cloud.",
       why:
-        "Running embeddings locally means ingestion has no per-chunk API cost and does not depend on a second provider key. Only chat generation calls an external service.",
-        tech: "Qdrant Cloud",
+        "A hosted embedding model avoids downloading a large local model, but it adds a network dependency, an API key and provider rate limits. Reusing the same model on both sides keeps vectors and questions in one space.",
+        tech: "Google Gemini Embedding API · 768 dimensions · normalized output",
       input: "Chunk text.",
       output: "One 768-dimension vector per chunk.",
       next:
         "Vectors, text and metadata are written to Qdrant Cloud.",
     },
     {
-      id: "chroma",
+      id: "qdrant",
       kicker: "Stage 6 · Ingestion",
       title: "Qdrant Cloud",
       visual: "qdrant",
       summary:
-        "Vectors are stored in Qdrant Cloud as the document_collection_v2 collection, together with the chunk text and metadata.",
+        "Vectors are stored in the document_collection_v2_gemini collection together with chunk text and metadata, including metadata.user_id.",
       what:
-        "Qdrant Cloud keeps vectors in the cloud. Listing documents groups stored chunks by doc_id, and deleting a document removes every vector whose metadata matches that ID.",
+        "Qdrant Cloud keeps vectors in the cloud. Payload indexes on metadata.user_id and metadata.doc_id support owner-scoped listing, counting, deletion and similarity search.",
       why:
-        "Persistence means the library survives a backend restart without re-embedding every file. Metadata filtering is also what makes document-scoped questions possible later.",
-      tech: "Qdrant Cloud",
-      input: "Chunk vectors, text and metadata.",
-      output: "A cloud vector collection that can be queried by similarity or filtered by doc_id.",
+        "Persistence means the library survives a backend restart without re-embedding every file. The owner filter is applied by Qdrant itself, so one account's chunks are not returned to another even if a doc_id is known.",
+      tech: "Qdrant Cloud · Cosine distance · payload indexes on user_id and doc_id",
+      input: "Chunk vectors, text and metadata from the signed-in owner.",
+      output: "A cloud collection that can be queried by similarity and filtered by owner or document.",
       next:
         "The ingestion path is finished. The next stage starts when a user asks a question.",
     },
@@ -164,15 +164,15 @@ export const ragTour = {
       title: "Similarity search selects context",
       visual: "retrieval",
       summary:
-        "The retriever returns the top-k most similar chunks, optionally restricted to the documents the user selected.",
+        "The retriever returns the top-k most similar chunks from the signed-in user's library, optionally restricted to the documents selected in the UI.",
       what:
-        "The default is k=3, configurable from 1 to 20. If the request includes doc_ids, Chroma applies a metadata filter so only chunks from those documents can be returned.",
+        "The default is k=3, configurable from 1 to 20. Qdrant always applies a metadata.user_id filter from the JWT and adds a metadata.doc_id filter when doc_ids are supplied.",
       why:
-        "A small, relevant context keeps the prompt focused and within token limits. Scoping retrieval lets a user ask about one document without answers drifting in from another.",
+        "A small, relevant context keeps the prompt focused and within token limits. Owner scoping is a hard filter, so a user can only ask about their own documents.",
       tech:
-        "Chroma as_retriever with search_type=\"similarity\" and an optional {\"doc_id\": {\"$in\": [...]}} filter.",
-      input: "Query vector, k and an optional list of document IDs.",
-      output: "The retrieved Document chunks, ranked by similarity.",
+        "Qdrant similarity search with a metadata.user_id filter and an optional metadata.doc_id subset filter.",
+      input: "Query vector, authenticated user_id, k and an optional list of document IDs.",
+      output: "The user's retrieved Document chunks, ranked by similarity.",
       next:
         "The chunks are joined into a context block and placed in the prompt.",
     },
@@ -222,7 +222,7 @@ export const ragTour = {
       summary:
         "The chat response returns the question, the answer, the number of chunks retrieved, and each retrieved chunk with its metadata.",
       what:
-        "Every source includes a chunk ID, the chunk content, and metadata such as doc_id, filename, chunk_index, and page or page_label when the loader supplied them. The UI renders these in an expandable sources section.",
+        "Every source includes a chunk ID, the chunk content, and metadata such as user_id, doc_id, filename, chunk_index, and page or page_label when the loader supplied them. The UI renders these in an expandable sources section.",
       why:
         "Citations turn the answer from an opaque claim into something a reader can check. If a source looks unrelated, that is a visible signal that retrieval or the question needs adjustment.",
       tech:
@@ -240,13 +240,13 @@ export const ragTour = {
       summary:
         "Ingestion and question answering are two paths through one modular backend, served alongside a static frontend by the same FastAPI process.",
       what:
-        "Uploads flow through API routes, document service, loaders, splitter, embeddings and Qdrant Cloud. Questions flow through the chat route, chat service, retriever, prompt, Groq and back as a cited response. Settings and structured errors are shared by both.",
+        "After a JWT is validated, uploads flow through API routes, the user-scoped document service, loaders, splitter, Gemini embeddings and Qdrant. Questions flow through the authenticated chat route, chat service, owner-filtered retriever, prompt, Groq and back as a cited response. User records live in Neon PostgreSQL, with SQLite as a local fallback. Settings and structured errors are shared by both.",
       why:
-        "Keeping ingestion, retrieval, generation and transport separate makes each stage testable in isolation. The tour you just took maps one-to-one onto those module boundaries.",
+        "Keeping identity, ingestion, retrieval, generation and transport separate makes each stage testable in isolation. The owner filter runs at the storage boundary rather than relying on the UI.",
       tech:
-        "FastAPI · LangChain LCEL · Qdrant Cloud · Google Gemini · Groq · vanilla HTML/CSS/JS.",
-      input: "Documents and questions.",
-      output: "A searchable local library and grounded, source-backed answers.",
+        "JWT auth · FastAPI · Neon PostgreSQL (psycopg v3) · LangChain LCEL · Qdrant Cloud · Google Gemini · Groq · vanilla HTML/CSS/JS.",
+      input: "Authenticated users, documents and questions.",
+      output: "A private, per-user library and grounded, source-backed answers.",
       next:
         "Open the chatbot to try it, or take the app tour for a walkthrough of the interface.",
     },
