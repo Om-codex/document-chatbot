@@ -10,6 +10,10 @@ Updated 2026-11-17: ADRs 1, 3, 4, 6 and 7 were revised when embeddings moved fro
 local Hugging Face to the Gemini Embedding API and the vector store moved from
 Chroma to Qdrant Cloud.
 
+Updated 2026-11-22: added JWT Bearer auth (ADR-12), owner-scoped vectors
+(ADR-13) and Neon/SQLite user storage (ADR-14); revised the CORS and deployment
+notes to match the cross-origin frontend.
+
 ---
 
 ## ADR-1 — Groq for chat, Gemini Embedding API for embeddings
@@ -84,40 +88,45 @@ undocumented raw distance previously caused confusion in the contract.
 - If a similarity score is added later, interpret it once in
   `retrieval/retriever.py` and document the metric; do not let the UI compare
   mixed metrics.
-- Qdrant point IDs must be UUIDs, so chunk IDs are mapped with `uuid5` while the
-  original `{doc_id}_{chunk_index}` strings remain in payload and API responses.
+- Qdrant point IDs must be UUIDs, so the owner-prefixed seed
+  `{user_id}_{doc_id}_{chunk_index}` is mapped with `uuid5`. The logical
+  `{doc_id}_{chunk_index}` string remains in payload and API responses.
 
 ---
 
 ## ADR-4 — Content-hash document IDs and deterministic chunk IDs
 
-**Decision:** `doc_id = sha256(file bytes).hexdigest()` (all 64 characters); chunk
-IDs are `f"{doc_id}_{chunk_index}"`.
+**Decision:** `doc_id = sha256(file bytes).hexdigest()` (all 64 characters); the
+logical chunk ID is `f"{doc_id}_{chunk_index}"`. The Qdrant point ID is a `uuid5`
+of `f"{user_id}_{doc_id}_{chunk_index}"` so two accounts uploading the same file
+never share a point.
 
-**Why:** re-uploading the same file is idempotent (we detect the duplicate and skip),
-and re-ingesting after a bug is safe (upsert instead of duplicate vectors).
-Deterministic IDs also make deletion and test assertions trivial.
+**Why:** re-uploading the same file is idempotent for one account (we detect the
+duplicate and skip), and re-ingesting after a bug is safe (upsert instead of
+duplicate vectors). Deterministic IDs also make deletion and test assertions
+trivial.
 
 **Consequences:**
-- Identical content under two different filenames collapses into one document. That
-  is intentional content-addressed deduplication; re-uploading replaces the existing
-  chunks instead of adding duplicates.
+- Identical content under two different filenames collapses into one document per
+  account. That is intentional content-addressed deduplication; re-uploading
+  replaces the existing chunks instead of adding duplicates.
 - Chunk IDs are stable only while `CHUNK_SIZE`/`CHUNK_OVERLAP` are unchanged. Changing
   them changes chunk boundaries; re-ingest the document.
-- Metadata must carry `doc_id` so subset filtering
-  (`FieldCondition(key="metadata.doc_id", match=MatchAny(...))`) and document
+- Metadata must carry `user_id` and `doc_id` so owner-scoped subset filtering
+  (`FieldCondition(key="metadata.user_id", ...)` plus
+  `FieldCondition(key="metadata.doc_id", match=MatchAny(...))`) and document
   deletion work.
 
 ---
 
 ## ADR-5 — Metadata flows through every pipeline stage
 
-**Decision:** every chunk carries `doc_id`, `filename`, `chunk_index`, and the
-loader metadata (`page`, `page_label`, `total_pages`, etc. when available).
+**Decision:** every chunk carries `user_id`, `doc_id`, `filename`, `chunk_index`,
+and the loader metadata (`page`, `page_label`, `total_pages`, etc. when available).
 
-**Why:** without metadata, citations are impossible and selective retrieval cannot
+**Why:** without metadata, citations, owner scoping and selective retrieval cannot
 be implemented. LangChain loaders preserve page numbers only if we do not discard
-them while splitting.
+them while splitting, and the authenticated owner must travel with the vector.
 
 **Consequences:** the splitter must copy document metadata to every child chunk and
 append `chunk_index`; the retriever must keep metadata when returning `Document`s;
@@ -132,8 +141,8 @@ numbers survive.
 `QDRANT_API_KEY`); run uvicorn with one worker (`--workers 1`) in `render.yaml`.
 
 **Why:** a managed vector store removes local SQLite locking/corruption concerns
-and works on hosts with ephemeral filesystems. One process is plenty for a
-single-user learning app and keeps the process-local caches (ADR-7) simple.
+and works on hosts with ephemeral filesystems. One process is plenty for this
+small authenticated app and keeps the process-local caches (ADR-7) simple.
 
 **Consequences:** `--reload` is fine locally (it restarts the process). Extra
 workers would each create their own Qdrant and embedding clients — safe for reads,
@@ -160,18 +169,22 @@ fake embeddings and LLM.
 
 ---
 
-## ADR-8 — Same-origin static frontend, no CORS by default
+## ADR-8 — Static frontend with an explicit CORS allow-list
 
 **Decision:** FastAPI serves `frontend/` with `StaticFiles(..., html=True)` mounted
 at `/app` as the last route. The root `/` returns a small JSON service banner.
+Locally the UI is same-origin; in production the static site lives on Cloudflare
+Workers and `CORS_ALLOW_ORIGINS` allow-lists that exact origin.
 
-**Why:** no CORS configuration, no duplicate servers, and relative asset paths just
-work. Keeping the UI under `/app` leaves `/` and `/api` unambiguous.
+**Why:** keeping the UI under `/app` in development leaves `/` and `/api`
+unambiguous, while hosting the static site on Workers removes backend serving
+work. An explicit origin is safer than a wildcard now that Bearer tokens and
+user data cross the boundary.
 
-**Consequences:** mount order matters — Starlette matches in declaration order. For
-frontend development without a backend, `python -m http.server` on another port is
-used with `?mock=1`; otherwise the UI calls the same origin or an explicit
-`?apiBase` origin allow-listed in `CORS_ALLOW_ORIGINS`.
+**Consequences:** mount order matters — Starlette matches in declaration order.
+CORS must wrap the unhandled-error middleware so a structured `500` still carries
+`Access-Control-Allow-Origin`; otherwise the browser reports a misleading network
+failure. `?mock=1` still supports backend-free UI work.
 
 ---
 
@@ -215,5 +228,69 @@ not grant them authority.
 
 **Consequences:** user questions are sent separately from context; citations are
 derived from metadata (not model output); UI renders all model text with
-`textContent` to avoid XSS. This is not a complete security boundary — no auth,
-local-only deployment — but it is the right baseline.
+`textContent` to avoid XSS. JWT auth and owner-scoped retrieval limit who can read
+a document (ADRs 12-13), but prompt injection is not a solved problem and the
+browser-held token is an XSS trade-off.
+
+---
+
+## ADR-12 — JWT Bearer authentication
+
+**Decision:** `POST /api/auth/register`, `POST /api/auth/login` and `GET /api/health`
+are public. Every document and chat route requires an HS256 JWT in
+`Authorization: Bearer <token>`. Passwords are hashed with Argon2 through
+`pwdlib`; the backend assigns `role: "editor"` and never trusts a role from the
+client.
+
+**Why:** the API and frontend are deployed on different hosts, so a stateless
+signed token keeps protected routes simple while still letting the backend own
+identity checks. Short-lived tokens limit exposure, and a single storage module
+keeps session handling consistent in the UI.
+
+**Alternatives rejected:** no authentication (the original local tool);
+server-side cookie sessions (cleaner for XSS, but requires a session store and a
+backend logout flow — recorded as future work).
+
+**Consequences:** `401` clears the browser session and redirects to
+`/app/login.html`; `403` shows access denied without logging out. The interim
+session lives in `localStorage`, which is readable by JavaScript, so tokens are
+never logged or placed in URLs. Frontend guards are convenience only; the backend
+validates every protected operation.
+
+---
+
+## ADR-13 — Owner-scoped vector storage
+
+**Decision:** the authenticated `user_id` is written to every chunk as
+`metadata.user_id`. Qdrant payload indexes cover `metadata.user_id` (integer) and
+`metadata.doc_id` (keyword). Upload, list, count, delete and similarity search all
+include the owner filter.
+
+**Why:** `doc_id` is a content hash that a user can learn from a shared filename
+or response. Without an owner filter, knowing that ID would be enough to read or
+delete another account's chunks. Filtering at the storage boundary keeps the
+invariant even if a route or UI check is missed.
+
+**Consequences:** Qdrant point identifiers are UUIDs derived from the owner plus
+doc/chunk IDs (ADR-4), and chat responses include `user_id` with chunk metadata.
+Chunks ingested before this decision must be re-indexed to gain the new payload
+field and index.
+
+---
+
+## ADR-14 — Neon user database with SQLite fallback
+
+**Decision:** SQLAlchemy selects its engine from `DATABASE_URL`. Production uses
+Neon PostgreSQL with `postgresql+psycopg://...` (psycopg v3); an unset URL falls
+back to `data/users.db` on local disk. `init_database()` runs at startup to create
+tables.
+
+**Why:** Render's filesystem is ephemeral, so SQLite cannot hold accounts in
+production. psycopg v3 was chosen over `psycopg2-binary` because the latter could
+not be installed on the verified Python 3.13 Windows environment. The fallback
+keeps offline development possible without a remote database.
+
+**Consequences:** `DATABASE_URL` and `JWT_SECRET_KEY` must be set in the Render
+dashboard (`render.yaml` declares them with `sync: false`). A database outage is
+logged but does not stop startup; DB-backed auth requests fail until it recovers.
+Production must use Neon — the SQLite fallback is not durable.
