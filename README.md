@@ -14,7 +14,9 @@ on Cloudflare Workers.
 |---|---|
 | API | FastAPI + Uvicorn |
 | Orchestration | LangChain 1.x (LCEL) |
-| Vector store | Qdrant Cloud (768-dim, Cosine distance) |
+| Authentication | JWT Bearer tokens (`PyJWT`) with Argon2 password hashing (`pwdlib`) |
+| User database | Neon PostgreSQL via SQLAlchemy + `psycopg` v3 (`postgresql+psycopg://`); SQLite fallback for local development |
+| Vector store | Qdrant Cloud (768-dim, Cosine distance, per-user metadata filters) |
 | Chat model | Groq `openai/gpt-oss-20b` (temperature 0, 2 retries) |
 | Embeddings | Google Gemini `gemini-embedding-2` API (768-dim, normalized) |
 | Frontend | Plain HTML, CSS, JavaScript (no build step) |
@@ -26,15 +28,23 @@ Verified on Python 3.13.14, Windows.
 
 ```
 document-chatbot/
-├── app.py                     # FastAPI entrypoint, error handlers, static mount
+├── app.py                     # FastAPI entrypoint, middleware, startup DB init, static mount
 ├── requirements.txt           # pinned, direct dependencies
 ├── .env.example               # documented settings, copy to .env
 ├── pytest.ini                 # default test selection
 ├── config/settings.py         # typed settings (env-driven)
 ├── api/
 │   ├── errors.py              # {detail: {code, message, details?}} helper
-│   ├── routes/                # documents, chat, health routers
+│   ├── routes/                # auth, documents, chat, health routers
 │   └── schemas/               # request/response Pydantic models
+├── auth/
+│   ├── token.py               # JWT encode/decode and expiry handling
+│   ├── dependencies.py        # Bearer extraction and current-user lookup
+│   └── security.py            # password hashing/verification
+├── database/
+│   ├── connection.py          # SQLAlchemy engine/session (psycopg or SQLite)
+│   ├── init_db.py             # creates tables at application startup
+│   └── models.py              # User model (id, email, hash, role, active, created_at)
 ├── services/
 │   ├── document_service.py    # upload, list, delete, cleanup/recovery
 │   ├── chat_service.py        # validation, retrieval, LLM error mapping
@@ -50,7 +60,7 @@ document-chatbot/
 ├── vectorstore/
 │   ├── qdrant_store.py        # Qdrant Cloud wrapper (replaces ChromaDB)
 │   └── chroma_store.py        # ChromaDB implementation (kept for rollback)
-├── retrieval/retriever.py          # top-k retrieval with optional doc filter
+├── retrieval/retriever.py          # top-k retrieval with owner + optional doc filters
 ├── chains/
 │   ├── prompt_template.py     # grounded prompt (context is untrusted data)
 │   └── qa_chain.py            # LCEL chain
@@ -60,17 +70,21 @@ document-chatbot/
 ├── utils/                     # logging, validation, file signatures, helpers
 ├── frontend/
 │   ├── index.html             # landing page (site entry)
-│   ├── chat.html              # chatbot UI
+│   ├── login.html             # sign in / create account
+│   ├── chat.html              # authenticated chatbot UI
 │   ├── tour.html              # tour chooser + accessible tour dialog
 │   ├── about.html             # motivation, architecture, decisions, limits
 │   ├── css/
 │   │   ├── styles.css         # chatbot UI styles
 │   │   └── site.css           # landing, tours and About styles
 │   └── js/
-│       ├── config.js          # real/mock switch + limits
-│       ├── api.js             # HTTP client (fetch + XHR upload)
+│       ├── config.js          # API base, mock switch and limits
+│       ├── api.js             # HTTP client (fetch + XHR upload, Bearer header)
 │       ├── mock.js            # optional demo adapter
-│       ├── app.js             # chatbot UI controller
+│       ├── auth.js            # register/login/session operations
+│       ├── auth-page.js       # login/signup form controller
+│       ├── session.js         # single localStorage session store
+│       ├── app.js             # authenticated dashboard controller
 │       ├── theme.js           # shared theme controller for site pages
 │       ├── site.js            # nav, scroll state and reveal behaviour
 │       ├── tour-engine.js     # reusable accessible tour dialog
@@ -102,11 +116,22 @@ python -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
-# edit .env and set GROQ_API_KEY, QDRANT_URL, QDRANT_API_KEY, GEMINI_API_KEY
+# edit .env and set GROQ_API_KEY, QDRANT_URL, QDRANT_API_KEY, GEMINI_API_KEY,
+# JWT_SECRET_KEY and (for Neon) DATABASE_URL
 ```
 
-No PyTorch or sentence-transformers download is required. Embeddings are served by
-the Google Gemini Embedding API.
+For the deployed user database, `DATABASE_URL` uses the psycopg v3 dialect:
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST/DBNAME?sslmode=require
+JWT_SECRET_KEY=<random string of at least 32 bytes>
+```
+
+If `DATABASE_URL` is omitted, the backend falls back to a local SQLite file at
+`data/users.db`. That is useful for offline development but is not durable on
+Render; the live service uses Neon. The vector library is Qdrant Cloud in both
+cases. No PyTorch or sentence-transformers download is required. Embeddings are
+served by the Google Gemini Embedding API.
 
 ## Run
 
@@ -115,7 +140,8 @@ the Google Gemini Embedding API.
 ```
 
 - Site: <http://127.0.0.1:8000/app/>
-- Chatbot: <http://127.0.0.1:8000/app/chat.html>
+- Sign in / create account: <http://127.0.0.1:8000/app/login.html>
+- Chatbot (sign-in required): <http://127.0.0.1:8000/app/chat.html>
 - Tours: <http://127.0.0.1:8000/app/tour.html> (`?tour=rag` or `?tour=app` opens one directly)
 - About: <http://127.0.0.1:8000/app/about.html>
 - API docs: <http://127.0.0.1:8000/docs>
@@ -138,6 +164,8 @@ Run **one** Uvicorn worker in local development.
 ## Site pages and tours
 
 - `frontend/index.html` introduces the project and links into the chatbot.
+- `frontend/login.html` provides sign-in and registration; the dashboard redirects
+  there until `GET /api/auth/me` confirms a valid JWT.
 - `frontend/tour.html` offers two optional tours. The engine tour has 12 steps
   across ingestion, retrieval and generation, including the real system prompt
   from `chains/prompt_template.py`. The app tour has 8 steps based on the actual
@@ -156,11 +184,13 @@ Run **one** Uvicorn worker in local development.
 python -m http.server 5500 --directory frontend
 ```
 
-Open <http://127.0.0.1:5500/chat.html?mock=1>. The landing, tour and About pages
-are static and do not call the API, so they work without a server. Without
-`?mock=1` the chatbot calls the real API at the same origin. When the UI is served
-from another origin, pass `?apiBase=http://127.0.0.1:8000` and allow that origin in
-`CORS_ALLOW_ORIGINS`.
+Open <http://127.0.0.1:5500/login.html?mock=1>, sign in with any valid email and
+8–128 character password, then open
+<http://127.0.0.1:5500/chat.html?mock=1>. The landing, tour and About pages are
+static and do not call the API, so they work without a server. Without `?mock=1`
+the chatbot calls the real API at the same origin and requires a real account.
+When the UI is served from another origin, pass
+`?apiBase=http://127.0.0.1:8000` and allow that origin in `CORS_ALLOW_ORIGINS`.
 
 Mock triggers: a filename containing `fail` fails that upload; a question
 containing `rate limit` returns a 429; deleting every document leaves chat with a
@@ -176,7 +206,13 @@ GROQ_API_KEY=...
 QDRANT_URL=...
 QDRANT_API_KEY=...
 GEMINI_API_KEY=...
+JWT_SECRET_KEY=...
+DATABASE_URL=postgresql+psycopg://...
 ```
+
+`DATABASE_URL` is optional for offline development (SQLite fallback), but must be
+set for the Neon-backed deployment. Use the `postgresql+psycopg://` scheme; the
+old `postgresql+psycopg2://` scheme is no longer supported.
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -200,6 +236,9 @@ GEMINI_API_KEY=...
 | `DEFAULT_TOP_K` / `MAX_TOP_K` | `3` / `20` | Retrieval depth |
 | `MAX_QUESTION_LENGTH` | `4000` | Chat question limit |
 | `MAX_SELECTED_DOCUMENTS` | `50` | Subset filter limit |
+| `DATABASE_URL` | `sqlite:///data/users.db` | Use `postgresql+psycopg://...` for Neon; SQLite is a local fallback |
+| `JWT_SECRET_KEY` | — | Required, at least 32 bytes; HS256 signing secret |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Lifetime of the access token inside the JWT |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `CORS_ALLOW_ORIGINS` | `["*"]` | Only needed for a cross-origin UI |
 
@@ -213,13 +252,16 @@ All endpoints are under `/api`. Errors use one envelope:
 { "detail": { "code": "INVALID_FILE_TYPE", "message": "Unsupported file format. Upload PDF, DOCX, or TXT.", "details": null } }
 ```
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/health` | Cheap readiness check (no model call) |
-| `GET` | `/api/documents/` | List indexed documents |
-| `POST` | `/api/documents/upload` | Upload **one** file (`multipart/form-data`, field `file`) |
-| `DELETE` | `/api/documents/{doc_id}` | Delete vectors belonging to the document |
-| `POST` | `/api/chat/` | Retrieve chunks and generate an answer |
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/api/health` | public | Cheap readiness check (no model call) |
+| `POST` | `/api/auth/register` | public | Create an account with email + password |
+| `POST` | `/api/auth/login` | public | Verify credentials and return a JWT |
+| `GET` | `/api/auth/me` | Bearer | Validate the token and return the public user |
+| `GET` | `/api/documents/` | Bearer | List the signed-in user's indexed documents |
+| `POST` | `/api/documents/upload` | Bearer | Upload **one** file (`multipart/form-data`, field `file`) |
+| `DELETE` | `/api/documents/{doc_id}` | Bearer | Delete the user's vectors for that document |
+| `POST` | `/api/chat/` | Bearer | Retrieve the user's chunks and generate an answer |
 
 Chat request:
 
@@ -229,8 +271,8 @@ Chat request:
 
 `doc_ids: null` (or omitted) searches all documents. `k` is 1–20. The response
 contains `answer`, `total_chunks_retrieved`, and `retrieved_chunks` (chunk content
-plus `metadata.doc_id`, `filename`, `chunk_index`, `page`, `page_number`,
-`total_pages`). There is no conversation history in v1.
+plus `metadata.user_id`, `doc_id`, `filename`, `chunk_index`, `page`, `page_number`,
+and `total_pages`). There is no conversation history in v1.
 
 Upload is synchronous and accepts a single file per request; the UI uploads
 multiple selected files sequentially. Re-uploading identical content replaces the
@@ -247,6 +289,15 @@ deleted after).
   exists in Qdrant, ingestion and embedding are skipped entirely.
 - Deletion removes vectors from Qdrant. Original files are temporary during
   ingestion only and are not stored persistently.
+- Every document and chat operation is scoped by the authenticated `user_id`.
+  Qdrant payload indexes on `metadata.user_id` and `metadata.doc_id` make those
+  filters efficient, and retrieval always includes the owner filter.
+- `init_database()` runs at startup so the `users` table is created on a fresh
+  instance. If the database is unreachable the failure is logged and the app
+  still starts, but DB-backed auth requests will fail until it is reachable.
+- Unhandled errors are converted by middleware that sits inside CORS, so browser
+  clients receive the structured error envelope rather than an opaque network
+  error.
 - The LLM is not called when retrieval returns no chunks; the API returns a
   deterministic "not found in the provided documents" answer.
 - Provider failures are translated to stable codes (`LLM_RATE_LIMIT`,
@@ -288,8 +339,37 @@ tokens are never logged, and tokens are never placed in URLs. Moving to
 HttpOnly + Secure + SameSite cookies would require a backend change and is out
 of scope for this integration.
 
-The marketing pages and `GET /api/health` stay public; only the document and
-chat features require authentication.
+The marketing pages, tours, `GET /api/health`, registration and login stay
+public; only the document and chat features require authentication.
+
+### User storage and per-user isolation
+
+User records live in the `users` table and contain:
+
+- `id` — the user ID. The JWT carries it as the `sub` claim.
+- `email` — normalized to lowercase and unique.
+- `hashed_password` — an Argon2 hash. Plain passwords are never stored.
+- `role` — assigned by the backend (`editor`); the UI never sends one.
+- `is_active` — inactive accounts cannot authenticate.
+- `created_at` — account creation time.
+
+Token expiry is **not** a database column. It is the `exp` claim inside the
+signed JWT (`iat` and `sub` are also in the token). The browser keeps the JWT
+and public user fields in `document-chatbot.session`.
+
+The deployed user store is **Neon PostgreSQL**, reached with SQLAlchemy and the
+psycopg v3 driver through `postgresql+psycopg://...`. SQLite at
+`data/users.db` remains the automatic fallback when `DATABASE_URL` is unset, so
+local development can run without external database access. The two modes are
+configured only by `DATABASE_URL`; no code change is needed to switch.
+
+Document isolation has two layers:
+
+1. The API derives `user_id` from the validated JWT and passes it to every
+   document/chat service call.
+2. Each Qdrant chunk stores `metadata.user_id`; upload, list, delete and
+   retrieval filters include that field, so one account cannot read or delete
+   another account's chunks even when a `doc_id` is known.
 
 ## Tests
 
@@ -315,6 +395,10 @@ PDF/DOCX/TXT ingestion, safe chunk replacement, subset retrieval, chat validatio
 LLM rate-limit/timeout/provider mapping, no-context answers, and sanitized error
 responses.
 
+The auth flow is also smoke-tested locally against the SQLite fallback:
+registration, login, `/api/auth/me`, and rejection of protected requests without
+a token.
+
 The original milestone scripts and the live Qdrant/Gemini smoke checks live in
 `tests/manual/` and are excluded from pytest collection. See
 [`tests/manual/README.md`](tests/manual/README.md).
@@ -326,6 +410,9 @@ The original milestone scripts and the live Qdrant/Gemini smoke checks live in
   implemented, but the JWT is held in browser storage (see above) and frontend
   route protection is not a security boundary: the backend validates every
   protected operation.
+- The SQLite fallback writes to the local container filesystem and is not
+  durable on Render. Production must set `DATABASE_URL` to Neon PostgreSQL;
+  local SQLite is for development only.
 - The Gemini Embedding free tier is limited to 100 embedding requests per minute.
   Large or rapid successive uploads may trigger rate-limit errors.
 - Uploads are synchronous, so large PDFs keep the request open while embeddings
@@ -345,4 +432,3 @@ The original milestone scripts and the live Qdrant/Gemini smoke checks live in
 5. Move sessions from browser storage to backend-managed HttpOnly cookies.
 6. Add hybrid search combining vector similarity with keyword matching.
 7. Add OCR support for scanned/image-only PDFs.
-```
