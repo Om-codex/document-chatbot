@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="About the Document Chatbot: motivation, architecture, backend module responsibilities, engineering decisions, limitations and credits." />
+  <meta name="description" content="About the Document Chatbot: JWT authentication, per-user document isolation, Neon PostgreSQL, Qdrant Cloud RAG architecture, engineering decisions and limitations." />
   <title>About — Document Chatbot</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/site.css?v=1" />
@@ -67,13 +67,16 @@
         <h1>A document assistant built to be understood, not just used.</h1>
         <p>
           This project is a complete retrieval-augmented generation application: a FastAPI
-          backend, a persistent local vector library, a grounded answer chain, and a plain
-          HTML/CSS/JS interface. It is small enough to read end to end, and honest about
-          what it does not do.
+          backend with JWT authentication, a Neon-backed user store, a Qdrant Cloud vector
+          library with per-user isolation, a grounded answer chain, and a plain HTML/CSS/JS
+          interface. It is small enough to read end to end, and honest about what it does
+          not do.
         </p>
         <div class="about-facts">
           <span class="about-fact">FastAPI + Uvicorn</span>
           <span class="about-fact">LangChain 1.x (LCEL)</span>
+          <span class="about-fact">JWT auth + per-user isolation</span>
+          <span class="about-fact">Neon PostgreSQL (psycopg v3)</span>
           <span class="about-fact">Qdrant Cloud</span>
           <span class="about-fact">Groq openai/gpt-oss-20b</span>
           <span class="about-fact">Gemini embeddings (768-dim)</span>
@@ -108,8 +111,8 @@
           <p>
             The design stance is simple: answer from the provided context, show the
             passages, fail with a readable message, and never present an unverified
-            capability as a feature. Chat generation uses an external API; embeddings and
-            the vector library run via hosted APIs.
+            capability as a feature. Chat generation, embeddings, vector storage and the
+            user database are hosted services; only document parsing happens in the app.
           </p>
           <p class="pull-quote">
             Grounded does not mean guaranteed. The system is designed to make its evidence
@@ -140,13 +143,17 @@
             </div>
 
             <div class="arch-lane">
-              <p class="arch-lane__title"><span>2</span>API and services</p>
+              <p class="arch-lane__title"><span>2</span>API, identity and services</p>
               <div class="arch-flow">
                 <button class="arch-node" type="button" data-node="routes" aria-pressed="false">FastAPI routes</button>
                 <span class="arch-arrow" aria-hidden="true">→</span>
                 <button class="arch-node" type="button" data-node="schemas" aria-pressed="false">Pydantic schemas</button>
                 <span class="arch-arrow" aria-hidden="true">→</span>
                 <button class="arch-node" type="button" data-node="services" aria-pressed="false">Services</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="auth" aria-pressed="false">JWT auth</button>
+                <span class="arch-arrow" aria-hidden="true">→</span>
+                <button class="arch-node" type="button" data-node="database" aria-pressed="false">Neon user DB</button>
               </div>
             </div>
 
@@ -212,22 +219,32 @@
           <article class="module-card" data-reveal>
             <code>app.py</code>
             <h3>Application entrypoint</h3>
-            <p>Creates the FastAPI app, configures CORS and structured error handlers, logs startup configuration, and mounts the static frontend at <code>/app</code>.</p>
+            <p>Creates the FastAPI app, initialises the database at startup, configures CORS and CORS-safe error middleware, logs configuration, and mounts the static frontend at <code>/app</code>.</p>
           </article>
           <article class="module-card" data-reveal>
             <code>api/</code>
             <h3>Transport layer</h3>
-            <p>Routes for chat, documents and health. Pydantic schemas validate requests and shape responses; <code>api/errors.py</code> builds the shared error envelope.</p>
+            <p>Routes for auth, chat, documents and health. Pydantic schemas validate requests and shape responses; <code>api/errors.py</code> builds the shared error envelope.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>auth/</code>
+            <h3>Identity layer</h3>
+            <p>Creates and verifies HS256 JWTs, extracts the Bearer token, resolves the current user and hashes passwords with Argon2 through <code>pwdlib</code>.</p>
+          </article>
+          <article class="module-card" data-reveal>
+            <code>database/</code>
+            <h3>User persistence</h3>
+            <p>SQLAlchemy engine and <code>User</code> model. <code>DATABASE_URL</code> selects Neon PostgreSQL via psycopg v3 or the SQLite fallback; <code>init_db.py</code> creates tables at startup.</p>
           </article>
           <article class="module-card" data-reveal>
             <code>services/</code>
             <h3>Application services</h3>
-            <p><code>document_service.py</code> streams and validates uploads, lists the library and deletes documents. <code>chat_service.py</code> validates document selection, builds the retriever and runs the chain.</p>
+            <p><code>document_service.py</code> streams and validates uploads, lists the library and deletes documents. <code>chat_service.py</code> validates document selection, builds the retriever and runs the chain. Both are scoped to the authenticated <code>user_id</code>.</p>
           </article>
           <article class="module-card" data-reveal>
             <code>ingestion/</code>
             <h3>Load, split and identify</h3>
-            <p>Format-specific loaders, the recursive character splitter, and the pipeline that computes the content hash and attaches <code>doc_id</code>, <code>filename</code> and <code>chunk_index</code>.</p>
+            <p>Format-specific loaders, the recursive character splitter, and the pipeline that computes the content hash and attaches <code>doc_id</code>, <code>filename</code>, <code>chunk_index</code> and the authenticated <code>user_id</code>.</p>
           </article>
           <article class="module-card" data-reveal>
             <code>embeddings/</code>
@@ -237,12 +254,12 @@
           <article class="module-card" data-reveal>
             <code>vectorstore/qdrant_store.py</code>
             <h3>Vector store</h3>
-            <p>Owns the Qdrant Cloud collection: upserting chunks, pruning stale IDs, listing documents, counting chunks and deleting by <code>doc_id</code>.</p>
+            <p>Owns the Qdrant collection: upserting chunks, pruning stale IDs, listing documents, counting chunks and deleting by owner plus <code>doc_id</code>. Payload indexes cover <code>metadata.user_id</code> and <code>metadata.doc_id</code>.</p>
           </article>
           <article class="module-card" data-reveal>
             <code>retrieval/</code>
             <h3>Similarity search</h3>
-            <p>Builds a similarity retriever with a configurable <code>k</code> and an optional <code>doc_id</code> filter for scoped questions.</p>
+            <p>Builds a similarity retriever with a configurable <code>k</code>. It always filters on <code>metadata.user_id</code> and can add an optional <code>doc_id</code> subset filter for scoped questions.</p>
           </article>
           <article class="module-card" data-reveal>
             <code>chains/</code>
@@ -306,7 +323,7 @@
           <details class="decision">
             <summary><span class="decision__tag decision__tag--doc">ADR-5</span> Metadata travels through every stage</summary>
             <div class="decision__body">
-              <p>Every chunk carries <code>doc_id</code>, <code>filename</code> and <code>chunk_index</code>, plus page metadata supplied by the loader. That is what makes document scoping and page-level citations possible without a second index.</p>
+              <p>Every chunk carries <code>user_id</code>, <code>doc_id</code>, <code>filename</code> and <code>chunk_index</code>, plus page metadata supplied by the loader. That is what makes owner scoping, document scoping and page-level citations possible without a second index.</p>
             </div>
           </details>
 
@@ -342,7 +359,31 @@
           <details class="decision">
             <summary><span class="decision__tag decision__tag--doc">ADR-10</span> Isolated tests with fake models</summary>
             <div class="decision__body">
-              <p>The normal test suite uses temporary Chroma and upload directories, fake embeddings and a fake chat model. A real-provider test is opt-in through an environment variable. This keeps the suite fast, deterministic and independent of network access.</p>
+              <p>The normal test suite uses an in-memory Qdrant client, temporary upload directories, deterministic fake embeddings and a fake chat model. A real-provider test is opt-in through an environment variable. This keeps the suite fast, deterministic and independent of network access.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-11</span> JWT Bearer authentication</summary>
+            <div class="decision__body">
+              <p>Registration and login are public; document and chat routes require a signed JWT in the <code>Authorization: Bearer</code> header. Passwords are hashed with Argon2 and never stored in plain text. A <code>401</code> clears the browser session and returns to sign-in, while a <code>403</code> shows access denied without logging the user out.</p>
+              <p>The interim frontend keeps the token in <code>localStorage</code> through one session module. That is convenient but readable by JavaScript, so XSS remains a token-theft risk; tokens are never logged, stored with passwords, or placed in URLs. HttpOnly cookies are future work.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--doc">ADR-12</span> Owner-scoped document isolation</summary>
+            <div class="decision__body">
+              <p>The API derives <code>user_id</code> from the validated token and passes it to every document and chat operation. Every Qdrant chunk carries <code>metadata.user_id</code>, and payload indexes make owner filters efficient.</p>
+              <p>Upload, list, delete and retrieval all include that owner filter, so knowing a <code>doc_id</code> is not enough to read or remove another account's chunks. Retrieved chunks return the owner ID with their metadata.</p>
+            </div>
+          </details>
+
+          <details class="decision">
+            <summary><span class="decision__tag decision__tag--design">ADR-13</span> Neon user database with a SQLite fallback</summary>
+            <div class="decision__body">
+              <p>User records live in SQLAlchemy. Deployment uses Neon PostgreSQL through psycopg v3 with a <code>postgresql+psycopg://</code> URL; leaving <code>DATABASE_URL</code> unset falls back to <code>data/users.db</code> for local development.</p>
+              <p>Tables are created at startup. A database outage is logged without preventing the app from starting, but DB-backed auth requests fail until the database is reachable again. The SQLite fallback is not durable on Render.</p>
             </div>
           </details>
         </div>
@@ -358,6 +399,9 @@
         </div>
 
         <ul class="check-list" data-reveal>
+          <li>Email/password sign-in with JWT Bearer tokens and Argon2 password hashing.</li>
+          <li>Per-user document libraries: every upload, query and delete is filtered by the authenticated owner.</li>
+          <li>Neon PostgreSQL user storage via SQLAlchemy and psycopg v3, with a SQLite fallback for local development.</li>
           <li>PDF, TXT and DOCX ingestion, plus a paste-text dialog that uses the same pipeline.</li>
           <li>Google Gemini Embedding API with <code>gemini-embedding-2</code>, 768-dimensional vectors.</li>
           <li>Grounded prompting with an explicit instruction to admit when the context does not contain the answer.</li>
@@ -376,13 +420,15 @@
         <div class="section-head section-head--left" data-reveal>
           <span class="eyebrow">Tech stack</span>
           <h2>Pinned tools, no hidden services</h2>
-          <p>Chat inference is the only external call. Document processing, embeddings and vector storage run locally.</p>
+          <p>Chat inference, embeddings, vector search and the user database are hosted services; only document parsing and orchestration run in the app process. No API keys are exposed to the browser.</p>
         </div>
 
         <div class="tech-grid">
           <div class="tech-card" data-reveal><span class="tech-icon">API</span><span><strong>FastAPI 0.162</strong><span>Typed routes, validation, static hosting</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">LC</span><span><strong>LangChain 1.x</strong><span>Loaders, splitter, retriever, LCEL chain</span></span></div>
-          <div class="tech-card" data-reveal><span class="tech-icon">QD</span><span><strong>Qdrant Cloud</strong><span>Cloud vector collection, 768-dim</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">JWT</span><span><strong>PyJWT + pwdlib</strong><span>Bearer tokens, Argon2 password hashes</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">PG</span><span><strong>Neon PostgreSQL</strong><span>SQLAlchemy + psycopg v3 user store</span></span></div>
+          <div class="tech-card" data-reveal><span class="tech-icon">QD</span><span><strong>Qdrant Cloud</strong><span>768-dim collection, per-user filters</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">GQ</span><span><strong>Groq + gpt-oss-20b</strong><span>Chat generation, temperature 0</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">GE</span><span><strong>Google Gemini</strong><span>gemini-embedding-2, 768-dim API</span></span></div>
           <div class="tech-card" data-reveal><span class="tech-icon">PD</span><span><strong>Pydantic Settings</strong><span>Environment-driven configuration</span></span></div>
@@ -409,7 +455,7 @@
               <li>Scanned or image-only PDFs will not yield text without OCR, which is not implemented.</li>
               <li>Complex DOCX tables and layouts may lose structure when extracted as plain text.</li>
               <li>Chunking is character-based with fixed defaults, not semantic or layout-aware.</li>
-              <li>The app has no authentication or per-user isolation; it is a local, single-user tool.</li>
+              <li>The JWT is held in <code>localStorage</code>, so an XSS flaw could expose it; HttpOnly cookie sessions are not implemented yet.</li>
               <li>Responses are not streamed; the answer appears when the request completes.</li>
               <li>Grounded prompting reduces invented answers but cannot guarantee correctness.</li>
             </ul>
@@ -423,9 +469,9 @@
               <li>OCR for scanned documents and better table extraction.</li>
               <li>Streaming answers with incremental source rendering.</li>
               <li>An evaluation harness for retrieval quality and answer faithfulness.</li>
-              <li>Authentication and per-user document libraries.</li>
+              <li>Move sessions from <code>localStorage</code> to HttpOnly + Secure + SameSite cookies, with server-side revocation.</li>
               <li>Background ingestion for very large files and richer document metadata.</li>
-              <li>Deployment hardening: containers, worker strategy and an external vector store.</li>
+              <li>Deployment hardening: containers, worker strategy and production observability.</li>
             </ul>
           </div>
         </div>
