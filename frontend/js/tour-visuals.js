@@ -117,11 +117,11 @@ page_label: "12"</pre>
       <div class="tv-store">
         <div class="tv-store__box"><strong>Vectors</strong><span>768-dim embeddings</span></div>
         <div class="tv-store__box"><strong>Documents</strong><span>chunk text</span></div>
-        <div class="tv-store__box"><strong>Metadata</strong><span>doc_id · filename · chunk_index</span></div>
+        <div class="tv-store__box"><strong>Metadata</strong><span>user_id · doc_id · filename · chunk_index</span></div>
         <div class="tv-store__box"><strong>In the cloud</strong><span>Qdrant Cloud</span></div>
       </div>
-      <div class="tv-chip-row">${chip("document_collection_v2", true)}${chip("cosine distance")}</div>
-      <p class="tv-note">Deleting a document removes every vector whose metadata matches its doc_id.</p>`;
+      <div class="tv-chip-row">${chip("document_collection_v2_gemini", true)}${chip("cosine distance")}${chip("per-user filters")}</div>
+      <p class="tv-note">Owner and document payload indexes keep listing, deletion and retrieval scoped to one account.</p>`;
   },
 
   "query-embedding"() {
@@ -156,9 +156,10 @@ page_label: "12"</pre>
       <div class="tv-chip-row">
         ${chip("k = 3 default", true)}
         ${chip("k range 1–20")}
+        ${chip("metadata.user_id filter")}
         ${chip("optional doc_id filter")}
       </div>
-      <p class="tv-note">Scoping adds a metadata filter: <code>{"doc_id": {"$in": [...]}}</code>.</p>`;
+      <p class="tv-note">Every query filters on <code>metadata.user_id</code> from the JWT; an optional <code>metadata.doc_id</code> filter narrows it to selected documents.</p>`;
   },
 
   prompt(step) {
@@ -287,7 +288,7 @@ const appVisuals = {
         </div>
       </div>
     </div>
-    <p class="tv-note">Hover the status pill to see the configured LLM, embedding model, collection and document count.</p>`;
+    <p class="tv-note">The dashboard is shown only after the JWT is verified; hover the status pill for the configured LLM, embedding model and collection.</p>`;
   },
 
   "app-upload"() {
