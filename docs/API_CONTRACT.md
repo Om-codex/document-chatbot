@@ -53,7 +53,13 @@ Authorization: Bearer <access_token>
 
 There is no logout endpoint: the frontend discards its stored token. `403`
 means the authenticated user lacks permission; the frontend shows an
-access-denied message and keeps the session.
+access-denied message and keeps the session. `401` clears the session and
+redirects to `/app/login.html`.
+
+The browser keeps the JWT and public user fields in `localStorage` under
+`document-chatbot.session`, centralised in `frontend/js/session.js`. Tokens are
+never logged or placed in URLs. This is an XSS trade-off, not a cookie-grade
+security boundary; backend route checks remain authoritative.
 
 ---
 
@@ -135,7 +141,7 @@ as `total_documents`.
 ```
 
 `status` is `"ok"` or `"degraded"` (vector store could not be read). The endpoint
-still returns `200` when degraded; `document_count` may be `null`.
+still returns `200` when degraded and never exposes a document count.
 
 ---
 
@@ -248,6 +254,7 @@ Response `200`:
       "chunk_id": "6f1c..._18",
       "content": "A write-through cache writes to the cache and the backing store.",
       "metadata": {
+        "user_id": 1,
         "doc_id": "6f1c...",
         "filename": "lecture-01.pdf",
         "chunk_index": 18,
@@ -264,6 +271,8 @@ Response `200`:
 - `retrieved_chunks` may be empty. The LLM is then skipped and `answer` is the
   deterministic no-context message.
 - `page` is zero-based (loader metadata); `page_number` is one-based for display.
+- `metadata.user_id` is the authenticated owner. Upload, list, delete and
+  retrieval all filter on it, so a guessed `doc_id` cannot cross accounts.
 - `429` responses include `Retry-After` and `detail.details.retry_after`.
 - Raw provider error bodies are never forwarded.
 
@@ -273,13 +282,18 @@ Response `200`:
 
 | UI action | Request |
 |---|---|
-| Load page | `GET /api/health` + `GET /api/documents/` (parallel) |
+| Sign in | `POST /api/auth/login`; store the returned session |
+| Load dashboard | `GET /api/auth/me`, then `GET /api/health` + `GET /api/documents/` |
 | Drop / choose files | `POST /api/documents/upload` once per file, field `file` |
 | Paste text → Save | Build a `.txt` `File` and upload it through the same endpoint |
 | Trash icon | `DELETE /api/documents/{doc_id}` |
 | "All documents" scope | `POST /api/chat/` with `doc_ids: null` |
 | Specific selection | `POST /api/chat/` with `doc_ids: [...]` |
 | Sources selector | `POST /api/chat/` with `k: 1..20` |
+
+Every request except `/api/health`, registration and login carries
+`Authorization: Bearer <access_token>`. Uploads send `multipart/form-data` and
+leave `Content-Type` unset so the browser supplies the boundary.
 
 The UI uses the real API by default. Append `?mock=1` to use
 `frontend/js/mock.js` without a backend; `?apiBase=http://127.0.0.1:8000` points a
@@ -289,6 +303,8 @@ cross-origin UI at the API.
 
 ## 8. Mock adapter behavior
 
+- Auth is mocked too: any well-formed email and 8–128 character password signs
+  in; the mock token is stored only in the browser session and no password is kept.
 - Seeds two documents: `lecture-notes.pdf` (12 chunks, 4 pages) and
   `getting-started.txt` (5 chunks).
 - Upload accepts `.pdf`, `.txt`, `.docx`; a filename containing `fail` produces an
@@ -304,28 +320,45 @@ cross-origin UI at the API.
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/health
-Invoke-RestMethod http://127.0.0.1:8000/api/documents/
 
+# Log in once; the token is kept in a variable, not printed.
+$env:ACCESS_TOKEN = (
+  Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/auth/login `
+    -ContentType 'application/json' `
+    -Body '{"email":"user@example.com","password":"your-password"}'
+).access_token
+
+$authHeaders = @{ Authorization = "Bearer $env:ACCESS_TOKEN" }
+
+Invoke-RestMethod http://127.0.0.1:8000/api/auth/me -Headers $authHeaders
+Invoke-RestMethod http://127.0.0.1:8000/api/documents/ -Headers $authHeaders
+
+# Do not set Content-Type: curl.exe supplies the multipart boundary.
 curl.exe -X POST http://127.0.0.1:8000/api/documents/upload `
+  -H "Authorization: Bearer $env:ACCESS_TOKEN" `
   -F "file=@C:\path\lecture.pdf"
 
 Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/chat/ `
+  -Headers $authHeaders `
   -ContentType 'application/json' `
   -Body '{"question":"What is the main topic?","doc_ids":null,"k":3}'
 
-Invoke-RestMethod -Method Delete http://127.0.0.1:8000/api/documents/<64-hex-doc-id>
+Invoke-RestMethod -Method Delete `
+  http://127.0.0.1:8000/api/documents/<64-hex-doc-id> -Headers $authHeaders
 ```
 
 ---
 
 ## 10. Serving the frontend
 
-Same origin, no CORS required:
+Same origin by default:
 
 ```python
 app.mount("/app", StaticFiles(directory="frontend", html=True), name="frontend")
 ```
 
 The mount is declared **after** all `/api` routes and the root endpoint because
-Starlette matches routes in declaration order. To run the UI from a separate dev
-server, allow-list that origin in `CORS_ALLOW_ORIGINS`.
+Starlette matches routes in declaration order. The live frontend is served from
+Cloudflare Workers, so production allow-lists that origin in
+`CORS_ALLOW_ORIGINS`. CORS is configured outside the unhandled-error middleware so
+structured `500` responses still reach cross-origin clients.
