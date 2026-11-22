@@ -2,9 +2,10 @@
  * Tour B — Your Guide to Using the Document Chatbot.
  *
  * This tour describes the real interface in `chat.html` and the behaviour
- * implemented in `js/app.js`: the health pill, dropzone, paste-text dialog,
- * library selection, scope summary, top-k field, composer, cited answers,
- * error banner and toasts. It does not invent features.
+ * implemented in `js/app.js` and `js/session.js`: the JWT guard at
+ * GET /api/auth/me, health pill, dropzone, paste-text dialog, library
+ * selection, scope summary, top-k field, composer, cited answers, error
+ * banner and toasts. It does not invent features.
  */
 
 export const appTour = {
@@ -28,18 +29,18 @@ export const appTour = {
     {
       id: "open",
       kicker: "Step 1 of 8",
-      title: "Open the app and check the connection",
+      title: "Sign in and open the dashboard",
       visual: "app-shell",
       summary:
-        "The chatbot lives at /app/chat.html. The header shows the app name, a back link, a theme toggle and a live connection pill.",
+        "The chatbot lives at /app/chat.html and stays hidden until GET /api/auth/me confirms the JWT saved at sign-in. With no valid session, the page sends you to /app/login.html.",
       what:
-        "While the page loads, the pill reads “Connecting…”. It then becomes “Connected” when the API and vector store are healthy, “Degraded” if the vector store cannot be read, or “API offline” if the backend cannot be reached. Hovering it shows the configured models, collection and document count.",
+        "The header shows the app name, a back link, a theme toggle and a live connection pill. While the page loads, the pill reads “Connecting…”. It then becomes “Connected” when the API and vector store are healthy, “Degraded” if the vector store cannot be read, or “API offline” if the backend cannot be reached. Hovering it shows the configured models and collection.",
       why:
-        "The pill tells you immediately whether a problem is in your browser or in the backend, so you do not debug an upload when the server is simply not running.",
+        "The sign-in gate keeps the dashboard private. The pill tells you immediately whether a problem is in your browser, your session or the backend, so you do not debug an upload when the server is simply not running.",
       tech:
         "Top-right of the header. The theme toggle and the “← Back to site” link sit next to it.",
-      input: "Open http://127.0.0.1:8000/app/chat.html with the FastAPI server running.",
-      output: "A connected status pill and your existing document library.",
+      input: "Sign in at http://127.0.0.1:8000/app/login.html, then open http://127.0.0.1:8000/app/chat.html with the FastAPI server running.",
+      output: "A verified session, a connected status pill and your own document library.",
       next:
         "With a healthy connection, add your first document.",
     },
